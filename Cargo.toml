@@ -6,6 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+async-channel = "2.2.0"
 rand = "0.8.5"
 sha3 = "0.10.8"
 tokio = { version = "1.15", features = ["full", "tracing"] }

@@ -1,3 +1,5 @@
+use mini_blockchain::simulator::chain_simulation;
+
 fn main() {
-    println!("Hello, world!");
+    chain_simulation();
 }

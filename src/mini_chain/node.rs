@@ -35,8 +35,8 @@ impl Default for Node {
 pub trait Proposer {
     fn build_block(&mut self) -> Result<Block, String>;
     fn send_propose_block(&mut self) {
-        let _propose_block = self.build_block().unwrap();
-        // Send proposed block via sender
+        let propose_block = self.build_block().unwrap();
+        println!("{:#?}", propose_block);
     }
 }
 
