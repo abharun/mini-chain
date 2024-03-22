@@ -6,15 +6,14 @@ pub struct MemPool {
 
 impl Default for MemPool {
     fn default() -> Self {
-        Self {
-            txqueue: vec![],
-        }
+        Self { txqueue: vec![] }
     }
 }
 
-trait MemPoolOperation {
+pub trait MemPoolOperation {
     fn add_transaction(&mut self, tx: Transaction) -> Result<(), String>;
     fn existing_transaction(&self, tx: Transaction) -> Result<bool, String>;
+    fn pickup_transaction(&mut self) -> Result<Transaction, String>;
 }
 
 impl MemPoolOperation for MemPool {
@@ -25,5 +24,9 @@ impl MemPoolOperation for MemPool {
 
     fn existing_transaction(&self, tx: Transaction) -> Result<bool, String> {
         Ok(self.txqueue.contains(&tx))
+    }
+
+    fn pickup_transaction(&mut self) -> Result<Transaction, String> {
+        Ok(self.txqueue.pop().unwrap())
     }
 }
