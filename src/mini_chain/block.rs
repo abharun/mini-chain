@@ -25,7 +25,7 @@ impl Default for Block {
     }
 }
 
-pub trait BlockOperation {
+pub trait BlockConfigurer {
     fn add_transaction(&self, tx: Transaction) -> bool;
     fn set_prev_hash(&self);
     fn calculate_block_hash(&self);

@@ -1,4 +1,4 @@
-use super::mempool::MemPool;
+use super::{chain::Blockchain, mempool::MemPool};
 
 pub struct Node {
     pub proposed_block_sender: String,
@@ -7,11 +7,12 @@ pub struct Node {
     pub mined_block_sender: String,
     pub mined_block_receiver: String,
 
-    pub mempool: MemPool
+    pub mempool: MemPool,
+    pub chain: Blockchain,
 }
 
-impl Node {
-    fn new() -> Self {
+impl Default for Node {
+    fn default() -> Self {
         Self {
             proposed_block_sender: String::new(),
             proposed_block_receiver: String::new(),
@@ -20,6 +21,11 @@ impl Node {
             mined_block_receiver: String::new(),
 
             mempool: MemPool::default(),
+            chain: Blockchain::default(),
         }
     }
+}
+
+pub trait Proposer {
+    fn build_block(&self) -> Result<(), String>;
 }

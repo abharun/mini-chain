@@ -6,6 +6,15 @@ pub struct Blockchain {
     leaf: String,
 }
 
+impl Default for Blockchain {
+    fn default() -> Self {
+        Self {
+            blocks: HashMap::new(),
+            leaf: String::new(),
+        }
+    }
+}
+
 pub trait BlockchainOperation {
     fn add_block(&mut self, block: Block) -> Result<(), String>;
     fn get_leaf(&self) -> Result<String, String>;
