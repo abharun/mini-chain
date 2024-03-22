@@ -1,8 +1,11 @@
 [package]
-name = "my_mini_chain"
+name = "mini_blockchain"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+rand = "0.8.5"
+sha3 = "0.10.8"
+tokio = { version = "1.15", features = ["full", "tracing"] }
