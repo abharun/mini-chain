@@ -31,7 +31,7 @@ impl Address {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Signature(String);
 
 impl Signature {
@@ -43,13 +43,13 @@ impl Signature {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct TxPayload {
     pub addr: Address,
     pub amount: u64,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Transaction {
     pub timestamp: u64,
     pub nonce: u64,

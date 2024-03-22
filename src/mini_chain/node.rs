@@ -10,8 +10,8 @@ pub struct Node {
     pub mempool: MemPool
 }
 
-impl Default for Node {
-    fn default() -> Self {
+impl Node {
+    fn new() -> Self {
         Self {
             proposed_block_sender: String::new(),
             proposed_block_receiver: String::new(),
