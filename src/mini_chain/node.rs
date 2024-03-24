@@ -2,11 +2,16 @@ use super::{
     block::{Block, BlockConfigurer},
     chain::{Blockchain, BlockchainOperation},
     mempool::{MemPool, MemPoolOperation},
-    metadata::{ChainMetaData, ChainMetaDataOperation},
+    metadata::{ChainMetaData, ChainMetaDataOperation}, transaction::Transaction,
 };
 use std::time::{Duration, SystemTime};
+use async_channel::{ Sender, Receiver };
+use async_trait::async_trait;
 
 pub struct Node {
+    pub client_tx_sender: Sender<Transaction>,
+    pub client_tx_receiver: Receiver<Transaction>,
+
     pub proposed_block_sender: String,
     pub proposed_block_receiver: String,
 
@@ -19,7 +24,11 @@ pub struct Node {
 
 impl Default for Node {
     fn default() -> Self {
+        let ( client_tx_sender, client_tx_receiver ) = async_channel::unbounded();
         Self {
+            client_tx_sender,
+            client_tx_receiver,
+
             proposed_block_sender: String::new(),
             proposed_block_receiver: String::new(),
 
@@ -29,6 +38,21 @@ impl Default for Node {
             mempool: MemPool::default(),
             chain: Blockchain::default(),
         }
+    }
+}
+
+#[async_trait]
+pub trait TxProcesser {
+    async fn add_tx_to_pool(&mut self) -> Result<(), String>;
+}
+
+#[async_trait]
+impl TxProcesser for Node {
+    async fn add_tx_to_pool(&mut self) -> Result<(), String> {
+        let tx = self.client_tx_receiver.recv().await.unwrap();
+
+        self.mempool.add_transaction(tx)?;
+        Ok(())
     }
 }
 
