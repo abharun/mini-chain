@@ -6,7 +6,6 @@ use crate::mini_chain::{
 };
 use async_channel::Sender;
 use async_trait::async_trait;
-use rand::Rng;
 
 #[derive(Debug, Clone)]
 pub struct Client {
@@ -35,13 +34,15 @@ pub trait TxTrigger {
 #[async_trait]
 impl TxTrigger for Client {
     async fn rand_tx_trigger(&self) -> Result<(), String> {
-        let mut rnd = rand::thread_rng();
-        let amount = rnd.gen_range(0..100);
+        // let mut rnd = rand::thread_rng();
+        // let amount = rnd.gen_range(0..100);
+        let amount = 20;
 
         let new_tx = Transaction::new(self.addr.clone(), amount);
-        let sender = self.net_tx_sender.clone();
 
-        let _ = sender.send(new_tx);
+        println!("Triggered TX: {:?}", new_tx.clone());
+
+        let _ = self.net_tx_sender.send(new_tx).await.map_err(|e| e.to_string())?;
 
         Ok(())
     }
@@ -52,9 +53,10 @@ pub trait TxTriggerController: TxTrigger {
     async fn run_tx_trigger(&self) {
         let metadata = ChainMetaData::default();
         let tx_trigger_slot = metadata.get_tx_gen_slot().unwrap();
+        tokio::time::sleep(Duration::from_secs(5)).await;
         loop {
             let _ = self.rand_tx_trigger().await;
-            tokio::time::sleep(Duration::from_millis(tx_trigger_slot)).await;
+            tokio::time::sleep(Duration::from_secs(tx_trigger_slot)).await;
         }
     }
 }

@@ -49,4 +49,6 @@ pub async fn chain_simulation() {
             Ok::<(), String>(())
         }
     );
+
+    println!("hello!");
 }

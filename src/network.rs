@@ -73,8 +73,11 @@ impl Network {
     }
 
     pub async fn display_received_tx(receiver: Receiver<Transaction>) {
-        let tx = receiver.recv().await.unwrap();
-        println!("{:#?}", tx);
+        loop {
+            if let Ok(tx) = receiver.recv().await {
+                println!("Received TX: {:?}", tx);
+            }
+        }
     }
 
     pub async fn run_network(&mut self) -> Result<(), String> {
