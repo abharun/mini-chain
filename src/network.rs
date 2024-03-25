@@ -72,6 +72,11 @@ impl Network {
         }
     }
 
+    pub async fn display_received_tx(receiver: Receiver<Transaction>) {
+        let tx = receiver.recv().await.unwrap();
+        println!("{:#?}", tx);
+    }
+
     pub async fn run_network(&mut self) -> Result<(), String> {
         let broadcast_future = Self::broadcast_message(
             self.channel.client_tx_receiver.clone(),
@@ -79,6 +84,14 @@ impl Network {
         );
 
         let _ = tokio::spawn(broadcast_future);
+
+        Ok(())
+    }
+
+    pub async fn tx_receiver(&mut self) -> Result<(), String> {
+        let display_tx_future = Self::display_received_tx(self.channel.client_tx_receiver.clone());
+
+        let _ = tokio::spawn(display_tx_future);
 
         Ok(())
     }
