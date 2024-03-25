@@ -53,7 +53,6 @@ pub trait TxTriggerController: TxTrigger {
     async fn run_tx_trigger(&self) {
         let metadata = ChainMetaData::default();
         let tx_trigger_slot = metadata.get_tx_gen_slot().unwrap();
-        tokio::time::sleep(Duration::from_secs(5)).await;
         loop {
             let _ = self.rand_tx_trigger().await;
             tokio::time::sleep(Duration::from_secs(tx_trigger_slot)).await;

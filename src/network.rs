@@ -64,18 +64,12 @@ impl Network {
         receiver: Receiver<T>,
         senders: Vec<Sender<T>>,
     ) {
-        let message = receiver.recv().await.unwrap();
-
-        for sender in senders {
-            let sender = sender.clone();
-            sender.send(message.clone()).await.unwrap();
-        }
-    }
-
-    pub async fn display_received_tx(receiver: Receiver<Transaction>) {
         loop {
-            if let Ok(tx) = receiver.recv().await {
-                println!("Received TX: {:?}", tx);
+            if let Ok(message) = receiver.recv().await {
+                for sender in &senders {
+                    let sender = sender.clone();
+                    sender.send(message.clone()).await.unwrap();
+                }
             }
         }
     }
@@ -87,14 +81,6 @@ impl Network {
         );
 
         let _ = tokio::spawn(broadcast_future);
-
-        Ok(())
-    }
-
-    pub async fn tx_receiver(&mut self) -> Result<(), String> {
-        let display_tx_future = Self::display_received_tx(self.channel.client_tx_receiver.clone());
-
-        let _ = tokio::spawn(display_tx_future);
 
         Ok(())
     }

@@ -1,4 +1,5 @@
 use crate::client::{Client, TxTriggerController};
+use crate::mini_chain::node::TxProcesser;
 use crate::mini_chain::{
     metadata::{ChainMetaData, ChainMetaDataOperation},
     node::Node,
@@ -21,7 +22,18 @@ pub async fn chain_simulation() {
         nodes.push(node);
     }
 
+    let mut node_runners = Vec::new();
+    for node in &nodes {
+        let node = node.clone();
+        node_runners.push(async move {
+            node.run_tx_receiver().await?;
+            Ok::<(), String>(())
+        });
+    }
+
     let mut network = Network::default();
+
+    network.set_pipeline(nodes.clone());
 
     let mut clients: Vec<Client> = vec![];
     for _ in 0..client_count {
@@ -38,16 +50,19 @@ pub async fn chain_simulation() {
         });
     }
 
-    // let _ = try_join_all(client_runners).await;
     let _ = tokio::try_join!(
         async {
             try_join_all(client_runners).await?;
             Ok::<(), String>(())
         },
         async {
-            network.tx_receiver().await?;
+            network.run_network().await?;
             Ok::<(), String>(())
-        }
+        },
+        async {
+            try_join_all(node_runners).await?;
+            Ok::<(), String>(())
+        },
     );
 
     println!("hello!");

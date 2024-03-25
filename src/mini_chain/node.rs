@@ -1,13 +1,15 @@
 use super::{
     block::{Block, BlockConfigurer},
     chain::{Blockchain, BlockchainOperation},
-    mempool::{MemPool, MemPoolOperation},
-    metadata::{ChainMetaData, ChainMetaDataOperation}, transaction::Transaction,
+    mempool::{ MemPool, MemPoolOperation},
+    metadata::{ChainMetaData, ChainMetaDataOperation},
+    transaction::Transaction,
 };
-use std::time::{Duration, SystemTime};
-use async_channel::{ Sender, Receiver };
+use async_channel::{Receiver, Sender};
 use async_trait::async_trait;
+use std::time::{Duration, SystemTime};
 
+#[derive(Debug, Clone)]
 pub struct Node {
     pub client_tx_sender: Sender<Transaction>,
     pub client_tx_receiver: Receiver<Transaction>,
@@ -24,7 +26,7 @@ pub struct Node {
 
 impl Default for Node {
     fn default() -> Self {
-        let ( client_tx_sender, client_tx_receiver ) = async_channel::unbounded();
+        let (client_tx_sender, client_tx_receiver) = async_channel::unbounded();
         Self {
             client_tx_sender,
             client_tx_receiver,
@@ -43,15 +45,25 @@ impl Default for Node {
 
 #[async_trait]
 pub trait TxProcesser {
-    async fn add_tx_to_pool(&mut self) -> Result<(), String>;
+    async fn add_tx_to_pool(receiver: Receiver<Transaction>, mut mempool: MemPool);
+    async fn run_tx_receiver(&self) -> Result<(), String>;
 }
 
 #[async_trait]
 impl TxProcesser for Node {
-    async fn add_tx_to_pool(&mut self) -> Result<(), String> {
-        let tx = self.client_tx_receiver.recv().await.unwrap();
+    async fn add_tx_to_pool(receiver: Receiver<Transaction>, mut mempool: MemPool) {
+        loop {
+            if let Ok(tx) = receiver.recv().await {
+                mempool.add_transaction(tx.clone()).unwrap();
+                println!("Added tx: {:?}", tx);
+            }
+        }
+    }
+    async fn run_tx_receiver(&self) -> Result<(), String> {
+        let tx_receiver_thread = Self::add_tx_to_pool(self.client_tx_receiver.clone(), self.mempool.clone());
 
-        self.mempool.add_transaction(tx)?;
+        tokio::spawn(tx_receiver_thread);
+
         Ok(())
     }
 }
