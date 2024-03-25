@@ -10,8 +10,8 @@ impl Default for ChainMetaData {
     fn default() -> Self {
         Self {
             node_count: 5,
-            client_count: 20,
-            tx_gen_slot: 50,
+            client_count: 5,
+            tx_gen_slot: 1,
             block_gen_slot: 1000,
             block_size: 20,
         }

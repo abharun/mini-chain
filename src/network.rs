@@ -64,11 +64,13 @@ impl Network {
         receiver: Receiver<T>,
         senders: Vec<Sender<T>>,
     ) {
-        let message = receiver.recv().await.unwrap();
-
-        for sender in senders {
-            let sender = sender.clone();
-            sender.send(message.clone()).await.unwrap();
+        loop {
+            if let Ok(message) = receiver.recv().await {
+                for sender in &senders {
+                    let sender = sender.clone();
+                    sender.send(message.clone()).await.unwrap();
+                }
+            }
         }
     }
 
