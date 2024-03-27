@@ -1,13 +1,14 @@
 use super::{
     block::{Block, BlockConfigurer},
     chain::{Blockchain, BlockchainOperation},
-    mempool::{ MemPool, MemPoolOperation},
+    mempool::{MemPool, MemPoolOperation},
     metadata::{ChainMetaData, ChainMetaDataOperation},
     transaction::Transaction,
 };
 use async_channel::{Receiver, Sender};
 use async_trait::async_trait;
-use std::time::{Duration, SystemTime};
+use tokio::sync::RwLock;
+use std::{sync::Arc, time::{Duration, SystemTime}};
 
 #[derive(Debug, Clone)]
 pub struct Node {
@@ -20,7 +21,7 @@ pub struct Node {
     pub mined_block_sender: String,
     pub mined_block_receiver: String,
 
-    pub mempool: MemPool,
+    pub mempool: Arc<RwLock<MemPool>>,
     pub chain: Blockchain,
 }
 
@@ -37,7 +38,7 @@ impl Default for Node {
             mined_block_sender: String::new(),
             mined_block_receiver: String::new(),
 
-            mempool: MemPool::default(),
+            mempool: Arc::new(RwLock::new(MemPool::default())),
             chain: Blockchain::default(),
         }
     }
@@ -45,39 +46,42 @@ impl Default for Node {
 
 #[async_trait]
 pub trait TxProcesser {
-    async fn add_tx_to_pool(receiver: Receiver<Transaction>, mut mempool: MemPool);
+    async fn add_tx_to_pool(receiver: Receiver<Transaction>, mempool: Arc<RwLock<MemPool>>);
     async fn run_tx_receiver(&self) -> Result<(), String>;
 }
 
 #[async_trait]
 impl TxProcesser for Node {
-    async fn add_tx_to_pool(receiver: Receiver<Transaction>, mut mempool: MemPool) {
+    async fn add_tx_to_pool(receiver: Receiver<Transaction>, mempool: Arc<RwLock<MemPool>>) {
         loop {
             if let Ok(tx) = receiver.recv().await {
-                mempool.add_transaction(tx.clone()).unwrap();
-                println!("Added tx: {:?}", tx);
+                let mut proc_mempool = mempool.write().await;
+                let _ = proc_mempool.add_transaction(tx.clone()).await;
             }
         }
     }
     async fn run_tx_receiver(&self) -> Result<(), String> {
-        let tx_receiver_thread = Self::add_tx_to_pool(self.client_tx_receiver.clone(), self.mempool.clone());
+        let tx_receiver_thread =
+            Self::add_tx_to_pool(self.client_tx_receiver.clone(), self.mempool.clone());
 
-        tokio::spawn(tx_receiver_thread);
+        let _ = tokio::spawn(tx_receiver_thread);
 
         Ok(())
     }
 }
 
+#[async_trait]
 pub trait Proposer {
-    fn build_block(&mut self) -> Result<Block, String>;
-    fn send_propose_block(&mut self) {
-        let propose_block = self.build_block().unwrap();
-        println!("{:#?}", propose_block);
+    async fn build_block(&self, mempool: Arc<RwLock<MemPool>>) -> Result<Block, String>;
+    async fn send_propose_block(&self, block: Block) {
+        println!("Built block for propose: {:?}", block);
     }
+    async fn run_proposer(&self) -> Result<(), String>;
 }
 
+#[async_trait]
 impl Proposer for Node {
-    fn build_block(&mut self) -> Result<Block, String> {
+    async fn build_block(&self, mempool: Arc<RwLock<MemPool>>) -> Result<Block, String> {
         let (block_propose_time, block_size) = {
             let chain_metadata = ChainMetaData::default();
             (
@@ -91,7 +95,8 @@ impl Proposer for Node {
         let time_limit = SystemTime::now() + Duration::from_millis(block_propose_time);
 
         for _ in 0..block_size {
-            let tx = self.mempool.pickup_transaction().unwrap();
+            let mut proc_mempool = mempool.write().await;
+            let tx = proc_mempool.pickup_transaction().await?;
 
             block.add_transaction(tx);
 
@@ -106,5 +111,29 @@ impl Proposer for Node {
         block.calculate_block_hash();
 
         Ok(block)
+    }
+
+    async fn run_proposer(&self) -> Result<(), String> {
+        
+        let block = self.build_block(self.mempool.clone()).await?;
+
+        self.send_propose_block(block).await;
+
+        Ok(())
+    }
+}
+
+#[async_trait]
+pub trait NodeController: TxProcesser + Proposer {
+    async fn run_node(&self) -> Result<(), String>;
+}
+
+#[async_trait]
+impl NodeController for Node {
+    async fn run_node(&self) -> Result<(), String> {
+        loop {
+            let _ = tokio::try_join!(self.run_tx_receiver(), self.run_proposer(),)
+                .expect_err("Failed to run Node!");
+        }
     }
 }

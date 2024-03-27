@@ -1,5 +1,5 @@
 use crate::client::{Client, TxTriggerController};
-use crate::mini_chain::node::TxProcesser;
+use crate::mini_chain::node::NodeController;
 use crate::mini_chain::{
     metadata::{ChainMetaData, ChainMetaDataOperation},
     node::Node,
@@ -26,7 +26,7 @@ pub async fn chain_simulation() {
     for node in &nodes {
         let node = node.clone();
         node_runners.push(async move {
-            node.run_tx_receiver().await?;
+            node.run_node().await?;
             Ok::<(), String>(())
         });
     }
@@ -64,6 +64,4 @@ pub async fn chain_simulation() {
             Ok::<(), String>(())
         },
     );
-
-    println!("hello!");
 }

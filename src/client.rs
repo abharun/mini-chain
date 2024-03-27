@@ -40,8 +40,6 @@ impl TxTrigger for Client {
 
         let new_tx = Transaction::new(self.addr.clone(), amount);
 
-        println!("Triggered TX: {:?}", new_tx.clone());
-
         let _ = self.net_tx_sender.send(new_tx).await.map_err(|e| e.to_string())?;
 
         Ok(())
@@ -55,7 +53,7 @@ pub trait TxTriggerController: TxTrigger {
         let tx_trigger_slot = metadata.get_tx_gen_slot().unwrap();
         loop {
             let _ = self.rand_tx_trigger().await;
-            tokio::time::sleep(Duration::from_secs(tx_trigger_slot)).await;
+            tokio::time::sleep(Duration::from_millis(tx_trigger_slot)).await;
         }
     }
 }
