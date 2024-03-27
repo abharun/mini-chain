@@ -15,8 +15,8 @@ pub struct Node {
     pub client_tx_sender: Sender<Transaction>,
     pub client_tx_receiver: Receiver<Transaction>,
 
-    pub proposed_block_sender: String,
-    pub proposed_block_receiver: String,
+    pub proposed_block_sender: Sender<Block>,
+    pub proposed_block_receiver: Receiver<Block>,
 
     pub mined_block_sender: String,
     pub mined_block_receiver: String,
@@ -28,12 +28,13 @@ pub struct Node {
 impl Default for Node {
     fn default() -> Self {
         let (client_tx_sender, client_tx_receiver) = async_channel::unbounded();
+        let (proposed_block_sender, proposed_block_receiver) = async_channel::unbounded();
         Self {
             client_tx_sender,
             client_tx_receiver,
 
-            proposed_block_sender: String::new(),
-            proposed_block_receiver: String::new(),
+            proposed_block_sender,
+            proposed_block_receiver,
 
             mined_block_sender: String::new(),
             mined_block_receiver: String::new(),
@@ -57,6 +58,7 @@ impl TxProcesser for Node {
             if let Ok(tx) = receiver.recv().await {
                 let mut proc_mempool = mempool.write().await;
                 let _ = proc_mempool.add_transaction(tx.clone()).await;
+                println!("Added tx: {:?}", tx);
             }
         }
     }
@@ -72,16 +74,15 @@ impl TxProcesser for Node {
 
 #[async_trait]
 pub trait Proposer {
-    async fn build_block(&self, mempool: Arc<RwLock<MemPool>>) -> Result<Block, String>;
-    async fn send_propose_block(&self, block: Block) {
-        println!("Built block for propose: {:?}", block);
-    }
+    async fn build_block(&self) -> Result<Block, String> ;
+    async fn send_propose_block(&self, block: Block) -> Result<(), String>;
+    async fn propose_new_block(&self) -> Result<(), String>;
     async fn run_proposer(&self) -> Result<(), String>;
 }
 
 #[async_trait]
 impl Proposer for Node {
-    async fn build_block(&self, mempool: Arc<RwLock<MemPool>>) -> Result<Block, String> {
+    async fn build_block(&self) -> Result<Block, String> {
         let (block_propose_time, block_size) = {
             let chain_metadata = ChainMetaData::default();
             (
@@ -95,8 +96,8 @@ impl Proposer for Node {
         let time_limit = SystemTime::now() + Duration::from_millis(block_propose_time);
 
         for _ in 0..block_size {
-            let mut proc_mempool = mempool.write().await;
-            let tx = proc_mempool.pickup_transaction().await?;
+            let mut proc_mempool = self.mempool.write().await;
+            let tx = proc_mempool.pickup_transaction().await.unwrap();
 
             block.add_transaction(tx);
 
@@ -113,13 +114,22 @@ impl Proposer for Node {
         Ok(block)
     }
 
-    async fn run_proposer(&self) -> Result<(), String> {
-        
-        let block = self.build_block(self.mempool.clone()).await?;
-
-        self.send_propose_block(block).await;
-
+    async fn send_propose_block(&self, block: Block) -> Result<(), String> {
+        self.proposed_block_sender.send(block).await.unwrap();
         Ok(())
+    }
+
+    async fn propose_new_block(&self) -> Result<(), String> {
+        let block = self.build_block().await?;
+        self.send_propose_block(block).await?;
+        Ok(())
+    }
+
+    async fn run_proposer(&self) -> Result<(), String> {
+        loop {
+            self.propose_new_block().await?;
+            tokio::task::yield_now().await;
+        }
     }
 }
 
