@@ -51,7 +51,7 @@ impl Default for Node {
 #[async_trait]
 pub trait TxProcesser {
     async fn add_tx_to_pool(&self);
-    async fn income_tx_processer(&self) -> Result<(), String>;
+    async fn run_tx_receiver(&self) -> Result<(), String>;
 }
 
 #[async_trait]
@@ -66,7 +66,7 @@ impl TxProcesser for Node {
         }
     }
 
-    async fn income_tx_processer(&self) -> Result<(), String> {
+    async fn run_tx_receiver(&self) -> Result<(), String> {
         let node = self.clone();
         tokio::spawn(async move {
             node.add_tx_to_pool().await;
@@ -162,7 +162,7 @@ pub trait NodeController: TxProcesser + Proposer {
 impl NodeController for Node {
     async fn run_node(&self) -> Result<(), String> {
         let _ = tokio::try_join!(async {
-            self.income_tx_processer().await?;
+            self.run_tx_receiver().await?;
             Ok::<(), String>(())
         });
 
