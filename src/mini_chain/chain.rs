@@ -1,6 +1,7 @@
 use super::block::Block;
 use std::collections::HashMap;
 
+#[derive(Debug, Clone)]
 pub struct Blockchain {
     blocks: HashMap<String, Block>,
     leaf: String,
