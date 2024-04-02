@@ -7,8 +7,11 @@ use super::{
 };
 use async_channel::{Receiver, Sender};
 use async_trait::async_trait;
+use std::{
+    sync::Arc,
+    time::{Duration, SystemTime},
+};
 use tokio::sync::RwLock;
-use std::{sync::Arc, time::{Duration, SystemTime}};
 
 #[derive(Debug, Clone)]
 pub struct Node {
@@ -47,26 +50,27 @@ impl Default for Node {
 
 #[async_trait]
 pub trait TxProcesser {
-    async fn add_tx_to_pool(receiver: Receiver<Transaction>, mempool: Arc<RwLock<MemPool>>);
-    async fn run_tx_receiver(&self) -> Result<(), String>;
+    async fn add_tx_to_pool(&self);
+    async fn income_tx_processer(&self) -> Result<(), String>;
 }
 
 #[async_trait]
 impl TxProcesser for Node {
-    async fn add_tx_to_pool(receiver: Receiver<Transaction>, mempool: Arc<RwLock<MemPool>>) {
+    async fn add_tx_to_pool(&self) {
         loop {
-            if let Ok(tx) = receiver.recv().await {
-                let mut proc_mempool = mempool.write().await;
+            if let Ok(tx) = self.client_tx_receiver.recv().await {
+                let mut proc_mempool = self.mempool.write().await;
                 let _ = proc_mempool.add_transaction(tx.clone()).await;
                 println!("Added tx: {:?}", tx);
             }
         }
     }
-    async fn run_tx_receiver(&self) -> Result<(), String> {
-        let tx_receiver_thread =
-            Self::add_tx_to_pool(self.client_tx_receiver.clone(), self.mempool.clone());
 
-        let _ = tokio::spawn(tx_receiver_thread);
+    async fn income_tx_processer(&self) -> Result<(), String> {
+        let node = self.clone();
+        tokio::spawn(async move {
+            node.add_tx_to_pool().await;
+        });
 
         Ok(())
     }
@@ -74,7 +78,7 @@ impl TxProcesser for Node {
 
 #[async_trait]
 pub trait Proposer {
-    async fn build_block(&self) -> Result<Block, String> ;
+    async fn build_block(&self) -> Result<Block, String>;
     async fn send_propose_block(&self, block: Block) -> Result<(), String>;
     async fn propose_new_block(&self) -> Result<(), String>;
     async fn run_proposer(&self) -> Result<(), String>;
@@ -97,9 +101,12 @@ impl Proposer for Node {
 
         for _ in 0..block_size {
             let mut proc_mempool = self.mempool.write().await;
-            let tx = proc_mempool.pickup_transaction().await.unwrap();
-
-            block.add_transaction(tx);
+            match proc_mempool.pickup_transaction().await {
+                Ok(tx) => {
+                    block.add_transaction(tx);
+                }
+                Err(_) => {}
+            };
 
             if SystemTime::now() > time_limit {
                 break;
@@ -121,7 +128,8 @@ impl Proposer for Node {
 
     async fn propose_new_block(&self) -> Result<(), String> {
         let block = self.build_block().await?;
-        self.send_propose_block(block).await?;
+        println!("Built block for propose: {:?}", block);
+        // self.send_propose_block(block).await?;
         Ok(())
     }
 
@@ -134,6 +142,18 @@ impl Proposer for Node {
 }
 
 #[async_trait]
+pub trait Miner {
+    async fn receive_proposed_block(&self) -> Result<(), String>;
+}
+
+#[async_trait]
+impl Miner for Node {
+    async fn receive_proposed_block(&self) -> Result<(), String> {
+        Ok(())
+    }
+}
+
+#[async_trait]
 pub trait NodeController: TxProcesser + Proposer {
     async fn run_node(&self) -> Result<(), String>;
 }
@@ -141,9 +161,11 @@ pub trait NodeController: TxProcesser + Proposer {
 #[async_trait]
 impl NodeController for Node {
     async fn run_node(&self) -> Result<(), String> {
-        loop {
-            let _ = tokio::try_join!(self.run_tx_receiver(), self.run_proposer(),)
-                .expect_err("Failed to run Node!");
-        }
+        let _ = tokio::try_join!(async {
+            self.income_tx_processer().await?;
+            Ok::<(), String>(())
+        });
+
+        Ok(())
     }
 }
