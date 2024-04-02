@@ -1,8 +1,5 @@
-use async_trait::async_trait;
-
 use super::transaction::Transaction;
 
-#[derive(Debug, Clone)]
 pub struct MemPool {
     pub txqueue: Vec<Transaction>,
 }
@@ -13,28 +10,23 @@ impl Default for MemPool {
     }
 }
 
-#[async_trait]
 pub trait MemPoolOperation {
-    async fn add_transaction(&mut self, tx: Transaction) -> Result<(), String>;
-    async fn existing_transaction(&self, tx: Transaction) -> Result<bool, String>;
-    async fn pickup_transaction(&mut self) -> Result<Transaction, String>;
+    fn add_transaction(&mut self, tx: Transaction) -> Result<(), String>;
+    fn existing_transaction(&self, tx: Transaction) -> Result<bool, String>;
+    fn pickup_transaction(&mut self) -> Result<Transaction, String>;
 }
 
-#[async_trait]
 impl MemPoolOperation for MemPool {
-    async fn add_transaction(&mut self, tx: Transaction) -> Result<(), String> {
+    fn add_transaction(&mut self, tx: Transaction) -> Result<(), String> {
         self.txqueue.push(tx);
         Ok(())
     }
 
-    async fn existing_transaction(&self, tx: Transaction) -> Result<bool, String> {
+    fn existing_transaction(&self, tx: Transaction) -> Result<bool, String> {
         Ok(self.txqueue.contains(&tx))
     }
 
-    async fn pickup_transaction(&mut self) -> Result<Transaction, String> {
-        match self.txqueue.pop() {
-            Some(tx) => {Ok(tx)}
-            None => { Err(String::from("Failed to pickup transaction from mempool.")) }
-        }
+    fn pickup_transaction(&mut self) -> Result<Transaction, String> {
+        Ok(self.txqueue.pop().unwrap())
     }
 }

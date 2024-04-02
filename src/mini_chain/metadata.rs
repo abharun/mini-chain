@@ -9,9 +9,9 @@ pub struct ChainMetaData {
 impl Default for ChainMetaData {
     fn default() -> Self {
         Self {
-            node_count: 1,
-            client_count: 5,
-            tx_gen_slot: 200,
+            node_count: 5,
+            client_count: 20,
+            tx_gen_slot: 50,
             block_gen_slot: 1000,
             block_size: 20,
         }
