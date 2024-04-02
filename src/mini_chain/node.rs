@@ -11,7 +11,7 @@ use std::{
     sync::Arc,
     time::{Duration, SystemTime},
 };
-use tokio::sync::RwLock;
+use tokio::{sync::RwLock, time::sleep};
 
 #[derive(Debug, Clone)]
 pub struct Node {
@@ -80,24 +80,24 @@ impl TxProcesser for Node {
 pub trait Proposer {
     async fn build_block(&self) -> Result<Block, String>;
     async fn send_propose_block(&self, block: Block) -> Result<(), String>;
-    async fn propose_new_block(&self) -> Result<(), String>;
+    async fn propose_new_block(&self);
     async fn run_proposer(&self) -> Result<(), String>;
 }
 
 #[async_trait]
 impl Proposer for Node {
     async fn build_block(&self) -> Result<Block, String> {
-        let (block_propose_time, block_size) = {
+        let (block_tx_pickup_period, block_size) = {
             let chain_metadata = ChainMetaData::default();
             (
-                chain_metadata.get_block_gen_slot().unwrap(),
+                chain_metadata.get_block_tx_pickup_period().unwrap(),
                 chain_metadata.get_block_size().unwrap(),
             )
         };
 
         let mut block = Block::default();
 
-        let time_limit = SystemTime::now() + Duration::from_millis(block_propose_time);
+        let time_limit = SystemTime::now() + Duration::from_millis(block_tx_pickup_period);
 
         for _ in 0..block_size {
             let mut proc_mempool = self.mempool.write().await;
@@ -126,18 +126,41 @@ impl Proposer for Node {
         Ok(())
     }
 
-    async fn propose_new_block(&self) -> Result<(), String> {
-        let block = self.build_block().await?;
-        println!("Built block for propose: {:?}", block);
-        // self.send_propose_block(block).await?;
-        Ok(())
+    async fn propose_new_block(&self) {
+        let (block_gen_slot, block_gen_period) = {
+            let chain_metadata = ChainMetaData::default();
+            (
+                chain_metadata.get_block_gen_slot().unwrap(),
+                chain_metadata.get_block_gen_period().unwrap(),
+            )
+        };
+        loop {
+            sleep(Duration::from_millis(block_gen_slot)).await;
+            // let block = self.build_block().await;
+
+            let block_builder = self.build_block();
+
+            match tokio::time::timeout(Duration::from_millis(block_gen_period), block_builder).await {
+                Ok(Ok(block)) => {
+                    println!("Built block for propose: {:?}", block);
+                }
+                Ok(Err(e)) => {
+                    println!("Failed proposing a new block:\n{:?}", e.to_string());
+                }
+                Err(_) => {
+                    println!("Failed proposing a new block within timeslot");
+                }
+            }
+        }
     }
 
     async fn run_proposer(&self) -> Result<(), String> {
-        loop {
-            self.propose_new_block().await?;
-            tokio::task::yield_now().await;
-        }
+        let node = self.clone();
+        tokio::spawn(async move {
+            node.propose_new_block().await;
+        });
+
+        Ok(())
     }
 }
 
@@ -161,10 +184,16 @@ pub trait NodeController: TxProcesser + Proposer {
 #[async_trait]
 impl NodeController for Node {
     async fn run_node(&self) -> Result<(), String> {
-        let _ = tokio::try_join!(async {
-            self.run_tx_receiver().await?;
-            Ok::<(), String>(())
-        });
+        let _ = tokio::try_join!(
+            async {
+                self.run_tx_receiver().await?;
+                Ok::<(), String>(())
+            },
+            async {
+                self.run_proposer().await?;
+                Ok::<(), String>(())
+            }
+        );
 
         Ok(())
     }
