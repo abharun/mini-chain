@@ -4,6 +4,7 @@ pub struct ChainMetaData {
     tx_gen_slot: u64,
     block_gen_slot: u64,
     block_gen_period: u64,
+    block_tx_pickup_period: u64,
     block_size: u64,
 }
 
@@ -15,6 +16,7 @@ impl Default for ChainMetaData {
             tx_gen_slot: 200,
             block_gen_slot: 2000,
             block_gen_period: 500,
+            block_tx_pickup_period: 400,
             block_size: 20,
         }
     }
@@ -26,6 +28,7 @@ pub trait ChainMetaDataOperation {
     fn get_tx_gen_slot(&self) -> Result<u64, String>;
     fn get_block_gen_slot(&self) -> Result<u64, String>;
     fn get_block_gen_period(&self) -> Result<u64, String>;
+    fn get_block_tx_pickup_period(&self) -> Result<u64, String>;
     fn get_block_size(&self) -> Result<u64, String>;
 }
 
@@ -48,6 +51,10 @@ impl ChainMetaDataOperation for ChainMetaData {
 
     fn get_block_gen_period(&self) -> Result<u64, String> {
         Ok(self.block_gen_period)
+    }
+
+    fn get_block_tx_pickup_period(&self) -> Result<u64, String> {
+        Ok(self.block_tx_pickup_period)
     }
 
     fn get_block_size(&self) -> Result<u64, String> {
