@@ -10,7 +10,6 @@ use async_trait::async_trait;
 #[derive(Debug, Clone)]
 pub struct Client {
     addr: Address,
-    amount: u64,
     net_tx_sender: Sender<Transaction>,
 }
 
@@ -20,7 +19,6 @@ impl Client {
 
         Self {
             addr: new_addr,
-            amount: 0,
             net_tx_sender: tx_sender,
         }
     }
