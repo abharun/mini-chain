@@ -6,6 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 #[derive(Debug, Clone)]
 pub struct Block {
     pub timestamp: u64,
+    pub tx_count: u64,
     pub transactions: Vec<Transaction>,
     pub nonce: u64,
     pub prev_hash: String,
@@ -20,6 +21,7 @@ impl Default for Block {
             .as_secs();
         Self {
             timestamp: timestamp,
+            tx_count: 0,
             transactions: vec![],
             nonce: 0,
             prev_hash: String::new(),
@@ -36,13 +38,14 @@ pub trait BlockConfigurer {
 
 impl BlockConfigurer for Block {
     fn add_transaction(&mut self, tx: Transaction) {
-        self.transactions.insert(0, tx)
+        self.transactions.insert(0, tx);
+        self.tx_count += 1;
     }
 
     fn calculate_block_hash(&mut self) {
         let mut hasher = Sha3_256::new();
 
-        let hash_str = format!("{}{}{}", self.timestamp, self.nonce, self.prev_hash);
+        let hash_str = format!("{}{}{}{}", self.timestamp, self.tx_count, self.nonce, self.prev_hash);
         hasher.update(hash_str);
 
         for tx in &self.transactions {
