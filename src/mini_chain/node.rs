@@ -61,7 +61,6 @@ impl TxProcesser for Node {
             if let Ok(tx) = self.client_tx_receiver.recv().await {
                 let mut proc_mempool = self.mempool.write().await;
                 let _ = proc_mempool.add_transaction(tx.clone()).await;
-                println!("Added tx: {:?}", tx);
             }
         }
     }
@@ -142,7 +141,7 @@ impl Proposer for Node {
 
             match tokio::time::timeout(Duration::from_millis(block_gen_period), block_builder).await {
                 Ok(Ok(block)) => {
-                    println!("Built block for propose: {:?}", block);
+                    self.send_propose_block(block).await.unwrap();
                 }
                 Ok(Err(e)) => {
                     println!("Failed proposing a new block:\n{:?}", e.to_string());
