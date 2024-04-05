@@ -51,7 +51,7 @@ pub trait TxTriggerController: TxTrigger {
         let tx_trigger_slot = metadata.get_tx_gen_slot().unwrap();
         loop {
             let _ = self.rand_tx_trigger().await;
-            tokio::time::sleep(Duration::from_millis(tx_trigger_slot)).await;
+            tokio::time::sleep(Duration::from_millis(tx_trigger_slot as u64)).await;
         }
     }
 }
