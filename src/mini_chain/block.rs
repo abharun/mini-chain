@@ -5,11 +5,12 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Clone)]
 pub struct Block {
-    pub timestamp: u64,
-    pub transactions: Vec<Transaction>,
-    pub nonce: u64,
-    pub prev_hash: String,
-    pub hash: String,
+    timestamp: usize,
+    tx_count: usize,
+    transactions: Vec<Transaction>,
+    nonce: usize,
+    prev_hash: String,
+    hash: String,
 }
 
 impl Default for Block {
@@ -17,15 +18,26 @@ impl Default for Block {
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
-            .as_secs();
+            .as_secs() as usize;
         Self {
             timestamp: timestamp,
+            tx_count: 0,
             transactions: vec![],
             nonce: 0,
             prev_hash: String::new(),
             hash: String::new(),
         }
     }
+}
+
+impl Block {
+    pub fn timestamp(&self) -> usize { self.timestamp }
+    pub fn tx_count(&self) -> usize { self.tx_count }
+    pub fn transactions(&self) -> Vec<Transaction> { self.transactions.clone() }
+    pub fn nonce(&self) -> usize { self.nonce }
+    pub fn prev_hash(&self) -> String { self.prev_hash.clone() }
+    pub fn hash(&self) -> String { self.hash.clone() }
+    pub fn inc_nonce(&mut self) { self.nonce += 1; }
 }
 
 pub trait BlockConfigurer {
@@ -36,13 +48,14 @@ pub trait BlockConfigurer {
 
 impl BlockConfigurer for Block {
     fn add_transaction(&mut self, tx: Transaction) {
-        self.transactions.insert(0, tx)
+        self.transactions.insert(0, tx);
+        self.tx_count += 1;
     }
 
     fn calculate_block_hash(&mut self) {
         let mut hasher = Sha3_256::new();
 
-        let hash_str = format!("{}{}{}", self.timestamp, self.nonce, self.prev_hash);
+        let hash_str = format!("{}{}{}{}", self.timestamp, self.tx_count, self.nonce, self.prev_hash);
         hasher.update(hash_str);
 
         for tx in &self.transactions {

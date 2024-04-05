@@ -23,9 +23,9 @@ pub trait BlockchainOperation {
 
 impl BlockchainOperation for Blockchain {
     fn add_block(&mut self, block: Block) -> Result<(), String> {
-        if self.blocks.contains_key(&block.prev_hash) || self.blocks.is_empty() {
-            self.blocks.insert(block.hash.clone(), block.clone());
-            self.leaf = block.hash.clone();
+        if self.blocks.contains_key(&block.prev_hash()) || self.blocks.is_empty() {
+            self.blocks.insert(block.hash(), block.clone());
+            self.leaf = block.hash();
         }
 
         Ok(())

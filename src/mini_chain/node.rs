@@ -8,8 +8,7 @@ use super::{
 use async_channel::{Receiver, Sender};
 use async_trait::async_trait;
 use std::{
-    sync::Arc,
-    time::{Duration, SystemTime},
+    sync::Arc, time::{Duration, SystemTime}
 };
 use tokio::{sync::RwLock, time::sleep};
 
@@ -21,8 +20,8 @@ pub struct Node {
     pub proposed_block_sender: Sender<Block>,
     pub proposed_block_receiver: Receiver<Block>,
 
-    pub mined_block_sender: String,
-    pub mined_block_receiver: String,
+    pub mined_block_sender: Sender<Block>,
+    pub mined_block_receiver: Receiver<Block>,
 
     pub mempool: Arc<RwLock<MemPool>>,
     pub chain: Blockchain,
@@ -32,6 +31,7 @@ impl Default for Node {
     fn default() -> Self {
         let (client_tx_sender, client_tx_receiver) = async_channel::unbounded();
         let (proposed_block_sender, proposed_block_receiver) = async_channel::unbounded();
+        let (mined_block_sender, mined_block_receiver) = async_channel::unbounded();
         Self {
             client_tx_sender,
             client_tx_receiver,
@@ -39,12 +39,19 @@ impl Default for Node {
             proposed_block_sender,
             proposed_block_receiver,
 
-            mined_block_sender: String::new(),
-            mined_block_receiver: String::new(),
+            mined_block_sender,
+            mined_block_receiver,
 
             mempool: Arc::new(RwLock::new(MemPool::default())),
             chain: Blockchain::default(),
         }
+    }
+}
+
+impl Node {
+    fn verify_block_hash(hash: String, difficulty: usize) -> bool {
+        let hash_binding = hash.as_str();
+        &hash_binding[0..difficulty] == "0".repeat(difficulty)
     }
 }
 
@@ -61,7 +68,6 @@ impl TxProcesser for Node {
             if let Ok(tx) = self.client_tx_receiver.recv().await {
                 let mut proc_mempool = self.mempool.write().await;
                 let _ = proc_mempool.add_transaction(tx.clone()).await;
-                println!("Added tx: {:?}", tx);
             }
         }
     }
@@ -97,7 +103,7 @@ impl Proposer for Node {
 
         let mut block = Block::default();
 
-        let time_limit = SystemTime::now() + Duration::from_millis(block_tx_pickup_period);
+        let time_limit = SystemTime::now() + Duration::from_millis(block_tx_pickup_period as u64);
 
         for _ in 0..block_size {
             let mut proc_mempool = self.mempool.write().await;
@@ -135,14 +141,14 @@ impl Proposer for Node {
             )
         };
         loop {
-            sleep(Duration::from_millis(block_gen_slot)).await;
+            sleep(Duration::from_millis(block_gen_slot as u64)).await;
             // let block = self.build_block().await;
 
             let block_builder = self.build_block();
 
-            match tokio::time::timeout(Duration::from_millis(block_gen_period), block_builder).await {
+            match tokio::time::timeout(Duration::from_millis(block_gen_period as u64), block_builder).await {
                 Ok(Ok(block)) => {
-                    println!("Built block for propose: {:?}", block);
+                    self.send_propose_block(block).await.unwrap();
                 }
                 Ok(Err(e)) => {
                     println!("Failed proposing a new block:\n{:?}", e.to_string());
@@ -166,12 +172,48 @@ impl Proposer for Node {
 
 #[async_trait]
 pub trait Miner {
-    async fn receive_proposed_block(&self) -> Result<(), String>;
+    async fn run_miner(&self) -> Result<(), String>;
+    async fn mine_block(&self);
+    async fn mining(&self, block: &mut Block) -> Result<Block, String>;
+    async fn send_mined_block(&self, block: Block) -> Result<(), String>;
 }
 
 #[async_trait]
 impl Miner for Node {
-    async fn receive_proposed_block(&self) -> Result<(), String> {
+    async fn run_miner(&self) -> Result<(), String> {
+        let node = self.clone();
+        tokio::spawn(async move {
+            node.mine_block().await;
+        });
+
+        Ok(())
+    }
+
+    async fn mine_block(&self) {
+        loop {
+            if let Ok(mut block) = self.proposed_block_receiver.recv().await {
+                let m_block = self.mining(&mut block).await.unwrap();
+                self.send_mined_block(m_block).await.unwrap();
+            }
+        }
+    }
+
+    async fn mining(&self, block: &mut Block) -> Result<Block, String> {
+        let block_difficulty = {
+            let chain_metadata = ChainMetaData::default();
+            chain_metadata.get_block_difficulty().unwrap()
+        };
+
+        while !Node::verify_block_hash(block.hash(), block_difficulty) {
+            block.inc_nonce();
+            block.calculate_block_hash();
+        }
+        Ok(block.clone())
+    }
+
+    async fn send_mined_block(&self, block: Block) -> Result<(), String> {
+        // self.mined_block_sender.send(block).await.unwrap();
+        println!("Mined Block: {:?}", block);
         Ok(())
     }
 }
@@ -191,6 +233,10 @@ impl NodeController for Node {
             },
             async {
                 self.run_proposer().await?;
+                Ok::<(), String>(())
+            },
+            async {
+                self.run_miner().await?;
                 Ok::<(), String>(())
             }
         );

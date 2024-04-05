@@ -10,7 +10,6 @@ use async_trait::async_trait;
 #[derive(Debug, Clone)]
 pub struct Client {
     addr: Address,
-    amount: u64,
     net_tx_sender: Sender<Transaction>,
 }
 
@@ -20,7 +19,6 @@ impl Client {
 
         Self {
             addr: new_addr,
-            amount: 0,
             net_tx_sender: tx_sender,
         }
     }
@@ -53,7 +51,7 @@ pub trait TxTriggerController: TxTrigger {
         let tx_trigger_slot = metadata.get_tx_gen_slot().unwrap();
         loop {
             let _ = self.rand_tx_trigger().await;
-            tokio::time::sleep(Duration::from_millis(tx_trigger_slot)).await;
+            tokio::time::sleep(Duration::from_millis(tx_trigger_slot as u64)).await;
         }
     }
 }

@@ -46,24 +46,24 @@ impl Signature {
 #[derive(Debug, PartialEq, Clone)]
 pub struct TxPayload {
     pub addr: Address,
-    pub amount: u64,
+    pub amount: usize,
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Transaction {
-    pub timestamp: u64,
-    pub nonce: u64,
+    pub timestamp: usize,
+    pub nonce: usize,
     pub payload: TxPayload,
     pub signer: Address,
     pub signature: Signature,
 }
 
 impl Transaction {
-    pub fn new(addr: Address, amount: u64) -> Self {
+    pub fn new(addr: Address, amount: usize) -> Self {
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
-            .as_secs();
+            .as_secs() as usize;
         Self {
             timestamp: timestamp,
             nonce: 0,
