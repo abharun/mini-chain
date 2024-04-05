@@ -5,10 +5,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Clone)]
 pub struct Block {
-    timestamp: u64,
-    tx_count: u64,
+    timestamp: usize,
+    tx_count: usize,
     transactions: Vec<Transaction>,
-    nonce: u64,
+    nonce: usize,
     prev_hash: String,
     hash: String,
 }
@@ -18,7 +18,7 @@ impl Default for Block {
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
-            .as_secs();
+            .as_secs() as usize;
         Self {
             timestamp: timestamp,
             tx_count: 0,
@@ -31,10 +31,10 @@ impl Default for Block {
 }
 
 impl Block {
-    pub fn timestamp(&self) -> u64 { self.timestamp }
-    pub fn tx_count(&self) -> u64 { self.tx_count }
+    pub fn timestamp(&self) -> usize { self.timestamp }
+    pub fn tx_count(&self) -> usize { self.tx_count }
     pub fn transactions(&self) -> Vec<Transaction> { self.transactions.clone() }
-    pub fn nonce(&self) -> u64 { self.nonce }
+    pub fn nonce(&self) -> usize { self.nonce }
     pub fn prev_hash(&self) -> String { self.prev_hash.clone() }
     pub fn hash(&self) -> String { self.hash.clone() }
     pub fn inc_nonce(&mut self) { self.nonce += 1; }
