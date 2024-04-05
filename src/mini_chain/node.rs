@@ -1,5 +1,5 @@
 use super::{
-    block::{Block, BlockConfigurer},
+    block::{self, Block, BlockConfigurer},
     chain::{Blockchain, BlockchainOperation},
     mempool::{MemPool, MemPoolOperation},
     metadata::{ChainMetaData, ChainMetaDataOperation},
@@ -21,8 +21,8 @@ pub struct Node {
     pub proposed_block_sender: Sender<Block>,
     pub proposed_block_receiver: Receiver<Block>,
 
-    pub mined_block_sender: String,
-    pub mined_block_receiver: String,
+    pub mined_block_sender: Sender<Block>,
+    pub mined_block_receiver: Receiver<Block>,
 
     pub mempool: Arc<RwLock<MemPool>>,
     pub chain: Blockchain,
@@ -32,6 +32,7 @@ impl Default for Node {
     fn default() -> Self {
         let (client_tx_sender, client_tx_receiver) = async_channel::unbounded();
         let (proposed_block_sender, proposed_block_receiver) = async_channel::unbounded();
+        let (mined_block_sender, mined_block_receiver) = async_channel::unbounded();
         Self {
             client_tx_sender,
             client_tx_receiver,
@@ -39,8 +40,8 @@ impl Default for Node {
             proposed_block_sender,
             proposed_block_receiver,
 
-            mined_block_sender: String::new(),
-            mined_block_receiver: String::new(),
+            mined_block_sender,
+            mined_block_receiver,
 
             mempool: Arc::new(RwLock::new(MemPool::default())),
             chain: Blockchain::default(),
@@ -165,12 +166,38 @@ impl Proposer for Node {
 
 #[async_trait]
 pub trait Miner {
-    async fn receive_proposed_block(&self) -> Result<(), String>;
+    async fn run_miner(&self) -> Result<(), String>;
+    async fn mine_block(&self);
+    async fn mining(&self, block: Block) -> Result<Block, String>;
+    async fn send_mined_block(&self, block: Block) -> Result<(), String>;
 }
 
 #[async_trait]
 impl Miner for Node {
-    async fn receive_proposed_block(&self) -> Result<(), String> {
+    async fn run_miner(&self) -> Result<(), String> {
+        let node = self.clone();
+        tokio::spawn(async move {
+            node.mine_block().await;
+        });
+
+        Ok(())
+    }
+
+    async fn mine_block(&self) {
+        loop {
+            if let Ok(block) = self.proposed_block_receiver.recv().await {
+                let m_block = self.mining(block).await.unwrap();
+                self.send_mined_block(m_block).await.unwrap();
+            }
+        }
+    }
+
+    async fn mining(&self, block: Block) -> Result<Block, String> {
+        Ok(Block::default())
+    }
+
+    async fn send_mined_block(&self, block: Block) -> Result<(), String> {
+        self.mined_block_sender.send(block).await.unwrap();
         Ok(())
     }
 }
