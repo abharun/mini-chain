@@ -5,12 +5,12 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Clone)]
 pub struct Block {
-    pub timestamp: u64,
-    pub tx_count: u64,
-    pub transactions: Vec<Transaction>,
-    pub nonce: u64,
-    pub prev_hash: String,
-    pub hash: String,
+    timestamp: u64,
+    tx_count: u64,
+    transactions: Vec<Transaction>,
+    nonce: u64,
+    prev_hash: String,
+    hash: String,
 }
 
 impl Default for Block {
@@ -28,6 +28,16 @@ impl Default for Block {
             hash: String::new(),
         }
     }
+}
+
+impl Block {
+    pub fn timestamp(&self) -> u64 { self.timestamp }
+    pub fn tx_count(&self) -> u64 { self.tx_count }
+    pub fn transactions(&self) -> Vec<Transaction> { self.transactions.clone() }
+    pub fn nonce(&self) -> u64 { self.nonce }
+    pub fn prev_hash(&self) -> String { self.prev_hash.clone() }
+    pub fn hash(&self) -> String { self.hash.clone() }
+    pub fn inc_nonce(&mut self) { self.nonce += 1; }
 }
 
 pub trait BlockConfigurer {
