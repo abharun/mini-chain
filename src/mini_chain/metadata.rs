@@ -6,6 +6,7 @@ pub struct ChainMetaData {
     block_gen_period: u64,
     block_tx_pickup_period: u64,
     block_size: u64,
+    block_difficulty: u64,
 }
 
 impl Default for ChainMetaData {
@@ -18,6 +19,7 @@ impl Default for ChainMetaData {
             block_gen_period: 500,
             block_tx_pickup_period: 400,
             block_size: 20,
+            block_difficulty: 2,
         }
     }
 }
@@ -30,6 +32,7 @@ pub trait ChainMetaDataOperation {
     fn get_block_gen_period(&self) -> Result<u64, String>;
     fn get_block_tx_pickup_period(&self) -> Result<u64, String>;
     fn get_block_size(&self) -> Result<u64, String>;
+    fn get_block_difficulty(&self) -> Result<u64, String>;
 }
 
 impl ChainMetaDataOperation for ChainMetaData {
@@ -59,5 +62,9 @@ impl ChainMetaDataOperation for ChainMetaData {
 
     fn get_block_size(&self) -> Result<u64, String> {
         Ok(self.block_size)
+    }
+
+    fn get_block_difficulty(&self) -> Result<u64, String> {
+        Ok(self.block_difficulty)
     }
 }
