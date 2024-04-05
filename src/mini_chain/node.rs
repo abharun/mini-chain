@@ -1,5 +1,5 @@
 use super::{
-    block::{self, Block, BlockConfigurer},
+    block::{Block, BlockConfigurer},
     chain::{Blockchain, BlockchainOperation},
     mempool::{MemPool, MemPoolOperation},
     metadata::{ChainMetaData, ChainMetaDataOperation},
@@ -8,7 +8,7 @@ use super::{
 use async_channel::{Receiver, Sender};
 use async_trait::async_trait;
 use std::{
-    hash, sync::Arc, time::{Duration, SystemTime}
+    sync::Arc, time::{Duration, SystemTime}
 };
 use tokio::{sync::RwLock, time::sleep};
 
@@ -45,6 +45,13 @@ impl Default for Node {
             mempool: Arc::new(RwLock::new(MemPool::default())),
             chain: Blockchain::default(),
         }
+    }
+}
+
+impl Node {
+    fn verify_block_hash(hash: String, difficulty: usize) -> bool {
+        let hash_binding = hash.as_str();
+        &hash_binding[0..difficulty] == "0".repeat(difficulty)
     }
 }
 
@@ -115,6 +122,8 @@ impl Proposer for Node {
         let prev_hash = self.chain.get_leaf().unwrap();
         block.set_prev_hash(prev_hash);
 
+        block.calculate_block_hash();
+
         Ok(block)
     }
 
@@ -167,7 +176,6 @@ pub trait Miner {
     async fn mine_block(&self);
     async fn mining(&self, block: &mut Block) -> Result<Block, String>;
     async fn send_mined_block(&self, block: Block) -> Result<(), String>;
-    fn get_leading_str(block: Block, length: usize) -> String;
 }
 
 #[async_trait]
@@ -190,27 +198,22 @@ impl Miner for Node {
         }
     }
 
-    fn get_leading_str(block: Block, length: usize) -> String {
-        let hash_binding = block.hash().clone();
-        let hash = hash_binding.as_str();
-        hash[0..length].to_string()
-    }
-
     async fn mining(&self, block: &mut Block) -> Result<Block, String> {
-        // let block_difficulty = {
-        //     let chain_metadata = ChainMetaData::default();
-        //     chain_metadata.get_block_difficulty().unwrap()
-        // };
+        let block_difficulty = {
+            let chain_metadata = ChainMetaData::default();
+            chain_metadata.get_block_difficulty().unwrap()
+        };
 
-        // while Miner::get_leading_str(block.clone(), block_difficulty) != "0".repeat(block_difficulty) {
-
-        // }
-
-        Ok(Block::default())
+        while !Node::verify_block_hash(block.hash(), block_difficulty) {
+            block.inc_nonce();
+            block.calculate_block_hash();
+        }
+        Ok(block.clone())
     }
 
     async fn send_mined_block(&self, block: Block) -> Result<(), String> {
-        self.mined_block_sender.send(block).await.unwrap();
+        // self.mined_block_sender.send(block).await.unwrap();
+        println!("Mined Block: {:?}", block);
         Ok(())
     }
 }
@@ -230,6 +233,10 @@ impl NodeController for Node {
             },
             async {
                 self.run_proposer().await?;
+                Ok::<(), String>(())
+            },
+            async {
+                self.run_miner().await?;
                 Ok::<(), String>(())
             }
         );
