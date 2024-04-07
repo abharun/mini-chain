@@ -25,7 +25,7 @@ pub struct Node {
     pub mined_block_receiver: Receiver<Block>,
 
     pub mempool: Arc<RwLock<MemPool>>,
-    pub chain: Blockchain,
+    pub chain: Arc<RwLock<Blockchain>>,
 }
 
 impl Default for Node {
@@ -44,7 +44,7 @@ impl Default for Node {
             mined_block_receiver,
 
             mempool: Arc::new(RwLock::new(MemPool::default())),
-            chain: Blockchain::default(),
+            chain: Arc::new(RwLock::new(Blockchain::default())),
         }
     }
 }
@@ -120,7 +120,8 @@ impl Proposer for Node {
             }
         }
 
-        let prev_hash = self.chain.get_leaf().unwrap();
+        let proc_chain = self.chain.write().await;
+        let prev_hash = proc_chain.get_leaf().unwrap();
         block.set_prev_hash(prev_hash);
 
         block.calculate_block_hash();
@@ -235,6 +236,7 @@ pub trait Verifier {
 #[async_trait]
 impl Verifier for Node {
     async fn verifier(&self, block: Block) -> bool {
+
         false
     }
 
