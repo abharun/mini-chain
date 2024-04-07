@@ -8,7 +8,8 @@ use super::{
 use async_channel::{Receiver, Sender};
 use async_trait::async_trait;
 use std::{
-    sync::Arc, time::{Duration, SystemTime}
+    sync::Arc,
+    time::{Duration, SystemTime},
 };
 use tokio::{sync::RwLock, time::sleep};
 
@@ -146,7 +147,12 @@ impl Proposer for Node {
 
             let block_builder = self.build_block();
 
-            match tokio::time::timeout(Duration::from_millis(block_gen_period as u64), block_builder).await {
+            match tokio::time::timeout(
+                Duration::from_millis(block_gen_period as u64),
+                block_builder,
+            )
+            .await
+            {
                 Ok(Ok(block)) => {
                     self.send_propose_block(block).await.unwrap();
                 }
@@ -219,7 +225,46 @@ impl Miner for Node {
 }
 
 #[async_trait]
-pub trait NodeController: TxProcesser + Proposer {
+pub trait Verifier {
+    async fn verifier(&self, block: Block) -> bool;
+    async fn verify_mined_block(&self);
+    async fn run_verifier(&self) -> Result<(), String>;
+    async fn add_mind_block_to_chain(&self, block: Block) -> Result<(), String>;
+}
+
+#[async_trait]
+impl Verifier for Node {
+    async fn verifier(&self, block: Block) -> bool {
+        false
+    }
+
+    async fn verify_mined_block(&self) {
+        loop {
+            if let Ok(mind_block) = self.mined_block_receiver.recv().await {
+                if self.verifier(mind_block.clone()).await {
+                    self.add_mind_block_to_chain(mind_block).await.unwrap();
+                }
+            }
+        }
+    }
+
+    async fn run_verifier(&self) -> Result<(), String> {
+        let node = self.clone();
+
+        tokio::spawn(async move {
+            node.verify_mined_block().await;
+        });
+
+        Ok(())
+    }
+
+    async fn add_mind_block_to_chain(&self, block: Block) -> Result<(), String> {
+        Ok(())
+    }
+}
+
+#[async_trait]
+pub trait NodeController: TxProcesser + Proposer + Miner + Verifier {
     async fn run_node(&self) -> Result<(), String>;
 }
 
