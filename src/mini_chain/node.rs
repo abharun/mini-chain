@@ -1,5 +1,5 @@
 use super::{
-    block::{Block, BlockConfigurer},
+    block::{ self, Block, BlockConfigurer},
     chain::{Blockchain, BlockchainOperation},
     mempool::{MemPool, MemPoolOperation},
     metadata::{ChainMetaData, ChainMetaDataOperation},
@@ -7,6 +7,7 @@ use super::{
 };
 use async_channel::{Receiver, Sender};
 use async_trait::async_trait;
+use sha3::{Digest, Sha3_256};
 use std::{
     sync::Arc,
     time::{Duration, SystemTime},
@@ -53,6 +54,21 @@ impl Node {
     fn verify_block_hash(hash: String, difficulty: usize) -> bool {
         let hash_binding = hash.as_str();
         &hash_binding[0..difficulty] == "0".repeat(difficulty)
+    }
+
+    fn calculate_block_hash(block: Block) -> String {
+        let mut hasher = Sha3_256::new();
+
+        let hash_str = format!("{}{}{}{}", block.timestamp(), block.tx_count(), block.nonce(), block.prev_hash());
+        hasher.update(hash_str);
+
+        for tx in block.transactions() {
+            let hash_str = format!("{:?}", tx);
+            hasher.update(hash_str);
+        }
+
+        let hash = format!("{:x}", hasher.finalize());
+        hash
     }
 }
 
@@ -123,8 +139,6 @@ impl Proposer for Node {
         let proc_chain = self.chain.write().await;
         let prev_hash = proc_chain.get_leaf().unwrap();
         block.set_prev_hash(prev_hash);
-
-        block.calculate_block_hash();
 
         Ok(block)
     }
@@ -211,10 +225,12 @@ impl Miner for Node {
             chain_metadata.get_block_difficulty().unwrap()
         };
 
-        while !Node::verify_block_hash(block.hash(), block_difficulty) {
+        let mut hash_value = Node::calculate_block_hash(block.clone());
+        while !Node::verify_block_hash(hash_value.clone(), block_difficulty) {
             block.inc_nonce();
-            block.calculate_block_hash();
+            hash_value = Node::calculate_block_hash(block.clone());
         }
+        block.set_hash(hash_value);
         Ok(block.clone())
     }
 
@@ -236,15 +252,32 @@ pub trait Verifier {
 #[async_trait]
 impl Verifier for Node {
     async fn verifier(&self, block: Block) -> bool {
+        let proc_chain = self.chain.write().await;
+        if block.prev_hash() != proc_chain.get_leaf().unwrap() {
+            return false;
+        }
 
-        false
+        let hash_value = Node::calculate_block_hash(block.clone());
+        if hash_value != block.hash() {
+            return false;
+        }
+
+        let block_difficulty = {
+            let chain_metadata = ChainMetaData::default();
+            chain_metadata.get_block_difficulty().unwrap()
+        };
+
+        return Node::verify_block_hash(hash_value, block_difficulty)
     }
 
     async fn verify_mined_block(&self) {
         loop {
             if let Ok(mind_block) = self.mined_block_receiver.recv().await {
                 if self.verifier(mind_block.clone()).await {
-                    self.add_mind_block_to_chain(mind_block).await.unwrap();
+                    // self.add_mind_block_to_chain(mind_block).await.unwrap();
+                    println!("Block Verifying Result: True");
+                } else {
+                    println!("Block Verifying Result: False");
                 }
             }
         }
