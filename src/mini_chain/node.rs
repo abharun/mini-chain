@@ -1,5 +1,5 @@
 use super::{
-    block::{ self, Block, BlockConfigurer},
+    block::{ Block, BlockConfigurer},
     chain::{Blockchain, BlockchainOperation},
     mempool::{MemPool, MemPoolOperation},
     metadata::{ChainMetaData, ChainMetaDataOperation},
@@ -235,7 +235,7 @@ impl Miner for Node {
     }
 
     async fn send_mined_block(&self, block: Block) -> Result<(), String> {
-        // self.mined_block_sender.send(block).await.unwrap();
+        self.mined_block_sender.send(block.clone()).await.unwrap();
         println!("Mined Block: {:?}", block);
         Ok(())
     }
@@ -317,6 +317,10 @@ impl NodeController for Node {
             },
             async {
                 self.run_miner().await?;
+                Ok::<(), String>(())
+            },
+            async {
+                self.run_verifier().await?;
                 Ok::<(), String>(())
             }
         );
