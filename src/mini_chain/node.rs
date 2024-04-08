@@ -3,7 +3,7 @@ use super::{
     chain::{Blockchain, BlockchainOperation},
     mempool::{MemPool, MemPoolOperation},
     metadata::{ChainMetaData, ChainMetaDataOperation},
-    transaction::Transaction,
+    transaction::{Address, Transaction},
 };
 use async_channel::{Receiver, Sender};
 use async_trait::async_trait;
@@ -16,6 +16,8 @@ use tokio::{sync::RwLock, time::sleep};
 
 #[derive(Debug, Clone)]
 pub struct Node {
+    pub address: Address,
+
     pub client_tx_sender: Sender<Transaction>,
     pub client_tx_receiver: Receiver<Transaction>,
 
@@ -31,10 +33,13 @@ pub struct Node {
 
 impl Default for Node {
     fn default() -> Self {
+        let address = Address::new();
         let (client_tx_sender, client_tx_receiver) = async_channel::unbounded();
         let (proposed_block_sender, proposed_block_receiver) = async_channel::unbounded();
         let (mined_block_sender, mined_block_receiver) = async_channel::unbounded();
         Self {
+            address,
+
             client_tx_sender,
             client_tx_receiver,
 
