@@ -1,5 +1,5 @@
 use super::{
-    block::{ Block, BlockConfigurer},
+    block::{ self, Block, BlockConfigurer},
     chain::{Blockchain, BlockchainOperation},
     mempool::{MemPool, MemPoolOperation},
     metadata::{ChainMetaData, ChainMetaDataOperation},
@@ -273,6 +273,13 @@ impl Verifier for Node {
             let chain_metadata = ChainMetaData::default();
             chain_metadata.get_block_difficulty().unwrap()
         };
+
+        let proc_pool = self.mempool.write().await;
+        for tx in block.transactions() {
+            if !proc_pool.existing_transaction(tx.clone()).await.unwrap() {
+                return false;
+            }
+        }
 
         return Node::verify_block_hash(hash_value, block_difficulty)
     }
