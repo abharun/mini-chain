@@ -3,6 +3,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Clone)]
 pub struct Block {
+    builder: Option<String>,
     timestamp: usize,
     tx_count: usize,
     transactions: Vec<Transaction>,
@@ -18,6 +19,7 @@ impl Default for Block {
             .unwrap()
             .as_secs() as usize;
         Self {
+            builder: None,
             timestamp: timestamp,
             tx_count: 0,
             transactions: vec![],
@@ -29,6 +31,12 @@ impl Default for Block {
 }
 
 impl Block {
+    pub fn builder(&self) -> Option<String> { 
+        match &self.builder {
+            Some(addr) => Some(addr.clone()),
+            None => None,
+        }
+    }
     pub fn timestamp(&self) -> usize { self.timestamp }
     pub fn tx_count(&self) -> usize { self.tx_count }
     pub fn transactions(&self) -> Vec<Transaction> { self.transactions.clone() }
@@ -40,6 +48,7 @@ impl Block {
 
 pub trait BlockConfigurer {
     fn add_transaction(&mut self, tx: Transaction);
+    fn set_block_builder(&mut self, addr: String);
     fn set_prev_hash(&mut self, prev_hash: String);
     fn set_hash(&mut self, hash: String);
 }
@@ -48,6 +57,10 @@ impl BlockConfigurer for Block {
     fn add_transaction(&mut self, tx: Transaction) {
         self.transactions.insert(0, tx);
         self.tx_count += 1;
+    }
+
+    fn set_block_builder(&mut self, addr: String) {
+        self.builder = Some(addr);
     }
 
     fn set_prev_hash(&mut self, prev_hash: String) {
