@@ -3,7 +3,7 @@ use super::{
     chain::{Blockchain, BlockchainOperation},
     mempool::{MemPool, MemPoolOperation},
     metadata::{ChainMetaData, ChainMetaDataOperation},
-    transaction::Transaction,
+    transaction::{Address, Transaction},
 };
 use async_channel::{Receiver, Sender};
 use async_trait::async_trait;
@@ -16,6 +16,8 @@ use tokio::{sync::RwLock, time::sleep};
 
 #[derive(Debug, Clone)]
 pub struct Node {
+    pub address: Address,
+
     pub client_tx_sender: Sender<Transaction>,
     pub client_tx_receiver: Receiver<Transaction>,
 
@@ -31,10 +33,13 @@ pub struct Node {
 
 impl Default for Node {
     fn default() -> Self {
+        let address = Address::new();
         let (client_tx_sender, client_tx_receiver) = async_channel::unbounded();
         let (proposed_block_sender, proposed_block_receiver) = async_channel::unbounded();
         let (mined_block_sender, mined_block_receiver) = async_channel::unbounded();
         Self {
+            address,
+
             client_tx_sender,
             client_tx_receiver,
 
@@ -59,7 +64,7 @@ impl Node {
     fn calculate_block_hash(block: Block) -> String {
         let mut hasher = Sha3_256::new();
 
-        let hash_str = format!("{}{}{}{}", block.timestamp(), block.tx_count(), block.nonce(), block.prev_hash());
+        let hash_str = format!("{}{}{}{}{}", block.builder().unwrap(), block.timestamp(), block.tx_count(), block.nonce(), block.prev_hash());
         hasher.update(hash_str);
 
         for tx in block.transactions() {
@@ -119,6 +124,8 @@ impl Proposer for Node {
         };
 
         let mut block = Block::default();
+
+        block.set_block_builder(self.address.get_public_address().to_string());
 
         let time_limit = SystemTime::now() + Duration::from_millis(block_tx_pickup_period as u64);
 
