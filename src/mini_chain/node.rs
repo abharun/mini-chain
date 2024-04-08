@@ -1,19 +1,23 @@
 use super::{
-    block::{Block, BlockConfigurer},
+    block::{ self, Block, BlockConfigurer},
     chain::{Blockchain, BlockchainOperation},
     mempool::{MemPool, MemPoolOperation},
     metadata::{ChainMetaData, ChainMetaDataOperation},
-    transaction::Transaction,
+    transaction::{Address, Transaction},
 };
 use async_channel::{Receiver, Sender};
 use async_trait::async_trait;
+use sha3::{Digest, Sha3_256};
 use std::{
-    sync::Arc, time::{Duration, SystemTime}
+    sync::Arc,
+    time::{Duration, SystemTime},
 };
 use tokio::{sync::RwLock, time::sleep};
 
 #[derive(Debug, Clone)]
 pub struct Node {
+    pub address: Address,
+
     pub client_tx_sender: Sender<Transaction>,
     pub client_tx_receiver: Receiver<Transaction>,
 
@@ -24,15 +28,18 @@ pub struct Node {
     pub mined_block_receiver: Receiver<Block>,
 
     pub mempool: Arc<RwLock<MemPool>>,
-    pub chain: Blockchain,
+    pub chain: Arc<RwLock<Blockchain>>,
 }
 
 impl Default for Node {
     fn default() -> Self {
+        let address = Address::new();
         let (client_tx_sender, client_tx_receiver) = async_channel::unbounded();
         let (proposed_block_sender, proposed_block_receiver) = async_channel::unbounded();
         let (mined_block_sender, mined_block_receiver) = async_channel::unbounded();
         Self {
+            address,
+
             client_tx_sender,
             client_tx_receiver,
 
@@ -43,7 +50,7 @@ impl Default for Node {
             mined_block_receiver,
 
             mempool: Arc::new(RwLock::new(MemPool::default())),
-            chain: Blockchain::default(),
+            chain: Arc::new(RwLock::new(Blockchain::default())),
         }
     }
 }
@@ -52,6 +59,21 @@ impl Node {
     fn verify_block_hash(hash: String, difficulty: usize) -> bool {
         let hash_binding = hash.as_str();
         &hash_binding[0..difficulty] == "0".repeat(difficulty)
+    }
+
+    fn calculate_block_hash(block: Block) -> String {
+        let mut hasher = Sha3_256::new();
+
+        let hash_str = format!("{}{}{}{}{}", block.builder().unwrap(), block.timestamp(), block.tx_count(), block.nonce(), block.prev_hash());
+        hasher.update(hash_str);
+
+        for tx in block.transactions() {
+            let hash_str = format!("{:?}", tx);
+            hasher.update(hash_str);
+        }
+
+        let hash = format!("{:x}", hasher.finalize());
+        hash
     }
 }
 
@@ -103,6 +125,8 @@ impl Proposer for Node {
 
         let mut block = Block::default();
 
+        block.set_block_builder(self.address.get_public_address().to_string());
+
         let time_limit = SystemTime::now() + Duration::from_millis(block_tx_pickup_period as u64);
 
         for _ in 0..block_size {
@@ -119,10 +143,9 @@ impl Proposer for Node {
             }
         }
 
-        let prev_hash = self.chain.get_leaf().unwrap();
+        let proc_chain = self.chain.write().await;
+        let prev_hash = proc_chain.get_leaf().unwrap();
         block.set_prev_hash(prev_hash);
-
-        block.calculate_block_hash();
 
         Ok(block)
     }
@@ -146,7 +169,12 @@ impl Proposer for Node {
 
             let block_builder = self.build_block();
 
-            match tokio::time::timeout(Duration::from_millis(block_gen_period as u64), block_builder).await {
+            match tokio::time::timeout(
+                Duration::from_millis(block_gen_period as u64),
+                block_builder,
+            )
+            .await
+            {
                 Ok(Ok(block)) => {
                     self.send_propose_block(block).await.unwrap();
                 }
@@ -204,22 +232,88 @@ impl Miner for Node {
             chain_metadata.get_block_difficulty().unwrap()
         };
 
-        while !Node::verify_block_hash(block.hash(), block_difficulty) {
+        let mut hash_value = Node::calculate_block_hash(block.clone());
+        while !Node::verify_block_hash(hash_value.clone(), block_difficulty) {
             block.inc_nonce();
-            block.calculate_block_hash();
+            hash_value = Node::calculate_block_hash(block.clone());
         }
+        block.set_hash(hash_value);
         Ok(block.clone())
     }
 
     async fn send_mined_block(&self, block: Block) -> Result<(), String> {
-        // self.mined_block_sender.send(block).await.unwrap();
+        self.mined_block_sender.send(block.clone()).await.unwrap();
         println!("Mined Block: {:?}", block);
         Ok(())
     }
 }
 
 #[async_trait]
-pub trait NodeController: TxProcesser + Proposer {
+pub trait Verifier {
+    async fn verifier(&self, block: Block) -> bool;
+    async fn verify_mined_block(&self);
+    async fn run_verifier(&self) -> Result<(), String>;
+    async fn add_mind_block_to_chain(&self, block: Block) -> Result<(), String>;
+}
+
+#[async_trait]
+impl Verifier for Node {
+    async fn verifier(&self, block: Block) -> bool {
+        let proc_chain = self.chain.write().await;
+        if block.prev_hash() != proc_chain.get_leaf().unwrap() {
+            return false;
+        }
+
+        let hash_value = Node::calculate_block_hash(block.clone());
+        if hash_value != block.hash() {
+            return false;
+        }
+
+        let block_difficulty = {
+            let chain_metadata = ChainMetaData::default();
+            chain_metadata.get_block_difficulty().unwrap()
+        };
+
+        let proc_pool = self.mempool.write().await;
+        for tx in block.transactions() {
+            if !proc_pool.existing_transaction(tx.clone()).await.unwrap() {
+                return false;
+            }
+        }
+
+        return Node::verify_block_hash(hash_value, block_difficulty)
+    }
+
+    async fn verify_mined_block(&self) {
+        loop {
+            if let Ok(mind_block) = self.mined_block_receiver.recv().await {
+                if self.verifier(mind_block.clone()).await {
+                    // self.add_mind_block_to_chain(mind_block).await.unwrap();
+                    println!("Block Verifying Result: True");
+                } else {
+                    println!("Block Verifying Result: False");
+                }
+            }
+        }
+    }
+
+    async fn run_verifier(&self) -> Result<(), String> {
+        let node = self.clone();
+
+        tokio::spawn(async move {
+            node.verify_mined_block().await;
+        });
+
+        Ok(())
+    }
+
+    async fn add_mind_block_to_chain(&self, block: Block) -> Result<(), String> {
+        Ok(())
+    }
+}
+
+#[async_trait]
+pub trait NodeController: TxProcesser + Proposer + Miner + Verifier {
     async fn run_node(&self) -> Result<(), String>;
 }
 
@@ -237,6 +331,10 @@ impl NodeController for Node {
             },
             async {
                 self.run_miner().await?;
+                Ok::<(), String>(())
+            },
+            async {
+                self.run_verifier().await?;
                 Ok::<(), String>(())
             }
         );
