@@ -1,5 +1,5 @@
 use super::{
-    block::{ self, Block, BlockConfigurer},
+    block::{ Block, BlockConfigurer},
     chain::{Blockchain, BlockchainOperation},
     mempool::{MemPool, MemPoolOperation},
     metadata::{ChainMetaData, ChainMetaDataOperation},
@@ -77,6 +77,7 @@ impl Node {
     }
 }
 
+// Receive TXs from Clients and store it into Mempool.
 #[async_trait]
 pub trait TxProcesser {
     async fn add_tx_to_pool(&self);
@@ -104,6 +105,7 @@ impl TxProcesser for Node {
     }
 }
 
+// Choose TXs from Mempool and build a new block.
 #[async_trait]
 pub trait Proposer {
     async fn build_block(&self) -> Result<Block, String>;
@@ -198,6 +200,7 @@ impl Proposer for Node {
     }
 }
 
+// Receives a proposed block and mine it by calculating block hash.
 #[async_trait]
 pub trait Miner {
     async fn run_miner(&self) -> Result<(), String>;
@@ -248,6 +251,7 @@ impl Miner for Node {
     }
 }
 
+// Receives a mined block and verify it if it's valid block. If it's verified, add it to the chain.
 #[async_trait]
 pub trait Verifier {
     async fn verifier(&self, block: Block) -> bool;
@@ -307,11 +311,12 @@ impl Verifier for Node {
         Ok(())
     }
 
-    async fn add_mind_block_to_chain(&self, block: Block) -> Result<(), String> {
+    async fn add_mind_block_to_chain(&self, _block: Block) -> Result<(), String> {
         Ok(())
     }
 }
 
+// Whole Node Controller
 #[async_trait]
 pub trait NodeController: TxProcesser + Proposer + Miner + Verifier {
     async fn run_node(&self) -> Result<(), String>;
