@@ -8,7 +8,8 @@ use super::{
 use async_channel::{Receiver, Sender};
 use async_trait::async_trait;
 use std::{
-    sync::Arc, time::{Duration, SystemTime}
+    sync::Arc,
+    time::{Duration, SystemTime},
 };
 use tokio::{sync::RwLock, time::sleep};
 
@@ -146,7 +147,12 @@ impl Proposer for Node {
 
             let block_builder = self.build_block();
 
-            match tokio::time::timeout(Duration::from_millis(block_gen_period as u64), block_builder).await {
+            match tokio::time::timeout(
+                Duration::from_millis(block_gen_period as u64),
+                block_builder,
+            )
+            .await
+            {
                 Ok(Ok(block)) => {
                     self.send_propose_block(block).await.unwrap();
                 }
@@ -215,6 +221,34 @@ impl Miner for Node {
         // self.mined_block_sender.send(block).await.unwrap();
         println!("Mined Block: {:?}", block);
         Ok(())
+    }
+}
+
+#[async_trait]
+pub trait Verifer {
+    async fn run_verifier(&self) -> Result<(), String>;
+    async fn verify_block(&self);
+}
+
+#[async_trait]
+impl Verifer for Node {
+    async fn run_verifier(&self) -> Result<(), String> {
+        let node = self.clone();
+        tokio::spawn(async move { 
+            node.verify_block().await
+        });
+
+        Ok(())
+    }
+
+    async fn verify_block(&self) {
+        loop {
+            if let Ok(mut _block) = self.mined_block_receiver.recv().await {
+                // Verify if TXs are existing in the mempool.
+                // Verify if block hash is calculated correctly.
+                // Broadcast to other nodes to be appended to the chain.
+            }
+        }
     }
 }
 
