@@ -1,20 +1,31 @@
 use async_channel::{Receiver, Sender};
 
-use crate::mini_chain::{node::Node, transaction::Transaction};
+use crate::mini_chain::{block::Block, node::Node, transaction::Transaction};
 
 pub struct Channels {
-    pub client_tx_sender: Sender<Transaction>,
-    pub client_tx_receiver: Receiver<Transaction>,
+    pub tx_sender: Sender<Transaction>,
+    pub tx_receiver: Receiver<Transaction>,
+
+    pub mined_block_sender: Sender<Block>,
+    pub mined_block_receiver: Receiver<Block>,
+
     pub node_tx_senders: Vec<Sender<Transaction>>,
+    pub node_mined_block_senders: Vec<Sender<Block>>,
 }
 
 impl Default for Channels {
     fn default() -> Self {
-        let (client_tx_sender, client_tx_receiver) = async_channel::unbounded();
+        let (tx_sender, tx_receiver) = async_channel::unbounded();
+        let (mined_block_sender, mined_block_receiver) = async_channel::unbounded();
         Self {
-            client_tx_sender,
-            client_tx_receiver,
+            tx_sender,
+            tx_receiver,
+
+            mined_block_sender,
+            mined_block_receiver,
+
             node_tx_senders: vec![],
+            node_mined_block_senders: vec![],
         }
     }
 }
@@ -27,6 +38,7 @@ impl ChannelConfigurer for Channels {
     fn set_pipeline(&mut self, nodes: Vec<Node>) {
         for node in nodes {
             self.node_tx_senders.push(node.client_tx_sender);
+            self.node_mined_block_senders.push(node.mined_block_sender);
         }
     }
 }
@@ -51,7 +63,7 @@ pub trait NetworkConfigurer {
 
 impl NetworkConfigurer for Network {
     fn get_tx_sender(&self) -> Sender<Transaction> {
-        self.channel.client_tx_sender.clone()
+        self.channel.tx_sender.clone()
     }
 
     fn set_pipeline(&mut self, nodes: Vec<Node>) {
@@ -76,7 +88,7 @@ impl Network {
 
     pub async fn run_network(&mut self) -> Result<(), String> {
         let broadcast_future = Self::broadcast_message(
-            self.channel.client_tx_receiver.clone(),
+            self.channel.tx_receiver.clone(),
             self.channel.node_tx_senders.clone(),
         );
 
