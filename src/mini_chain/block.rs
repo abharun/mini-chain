@@ -4,6 +4,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 #[derive(Debug, Clone)]
 pub struct Block {
     builder: Option<String>,
+    sequence: Option<u64>,
     timestamp: usize,
     tx_count: usize,
     transactions: Vec<Transaction>,
@@ -20,6 +21,7 @@ impl Default for Block {
             .as_secs() as usize;
         Self {
             builder: None,
+            sequence: None,
             timestamp: timestamp,
             tx_count: 0,
             transactions: vec![],
@@ -37,6 +39,7 @@ impl Block {
             None => None,
         }
     }
+    pub fn sequence(&self) -> Option<u64> { self.sequence }
     pub fn timestamp(&self) -> usize { self.timestamp }
     pub fn tx_count(&self) -> usize { self.tx_count }
     pub fn transactions(&self) -> Vec<Transaction> { self.transactions.clone() }
@@ -49,6 +52,7 @@ impl Block {
 pub trait BlockConfigurer {
     fn add_transaction(&mut self, tx: Transaction);
     fn set_block_builder(&mut self, addr: String);
+    fn set_block_sequence(&mut self, seq: u64);
     fn set_prev_hash(&mut self, prev_hash: String);
     fn set_hash(&mut self, hash: String);
 }
@@ -61,6 +65,10 @@ impl BlockConfigurer for Block {
 
     fn set_block_builder(&mut self, addr: String) {
         self.builder = Some(addr);
+    }
+
+    fn set_block_sequence(&mut self, seq: u64) {
+        self.sequence = Some(seq);
     }
 
     fn set_prev_hash(&mut self, prev_hash: String) {

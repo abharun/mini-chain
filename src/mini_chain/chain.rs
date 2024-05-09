@@ -5,6 +5,7 @@ use std::collections::HashMap;
 pub struct Blockchain {
     blocks: HashMap<String, Block>,
     leaf: String,
+    sequence: u64
 }
 
 impl Default for Blockchain {
@@ -12,6 +13,7 @@ impl Default for Blockchain {
         Self {
             blocks: HashMap::new(),
             leaf: String::new(),
+            sequence: 0,
         }
     }
 }
@@ -19,6 +21,7 @@ impl Default for Blockchain {
 pub trait BlockchainOperation {
     fn add_block(&mut self, block: Block) -> Result<(), String>;
     fn get_leaf(&self) -> Result<String, String>;
+    fn get_sequence(&self) -> Result<u64, String>;
 }
 
 impl BlockchainOperation for Blockchain {
@@ -33,5 +36,9 @@ impl BlockchainOperation for Blockchain {
 
     fn get_leaf(&self) -> Result<String, String> {
         Ok(self.leaf.clone())
+    }
+
+    fn get_sequence(&self) -> Result<u64, String> {
+        Ok(self.sequence)
     }
 }

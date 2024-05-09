@@ -69,8 +69,9 @@ impl Node {
         let mut hasher = Sha3_256::new();
 
         let hash_str = format!(
-            "{}{}{}{}{}",
+            "{}{}{}{}{}{}",
             block.builder().unwrap(),
+            block.sequence().unwrap(),
             block.timestamp(),
             block.tx_count(),
             block.nonce(),
@@ -139,6 +140,9 @@ impl Proposer for Node {
         let mut block = Block::default();
 
         block.set_block_builder(self.address.get_public_address().to_string());
+
+        let proc_chain = self.chain.write().await;
+        block.set_block_sequence(proc_chain.get_sequence().unwrap());
 
         let time_limit = SystemTime::now() + Duration::from_millis(block_tx_pickup_period as u64);
 
