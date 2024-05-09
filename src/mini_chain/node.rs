@@ -27,12 +27,14 @@ pub struct Node {
     pub mined_block_sender: Sender<Block>,
     pub mined_block_receiver: Receiver<Block>,
 
+    pub net_mined_block_sender: Sender<Block>,
+
     pub mempool: Arc<RwLock<MemPool>>,
     pub chain: Arc<RwLock<Blockchain>>,
 }
 
-impl Default for Node {
-    fn default() -> Self {
+impl Node {
+    pub fn new(net_mined_block_sender: Sender<Block>) -> Self {
         let address = Address::new();
         let (client_tx_sender, client_tx_receiver) = async_channel::unbounded();
         let (proposed_block_sender, proposed_block_receiver) = async_channel::unbounded();
@@ -48,6 +50,8 @@ impl Default for Node {
 
             mined_block_sender,
             mined_block_receiver,
+
+            net_mined_block_sender,
 
             mempool: Arc::new(RwLock::new(MemPool::default())),
             chain: Arc::new(RwLock::new(Blockchain::default())),
@@ -245,8 +249,7 @@ impl Miner for Node {
     }
 
     async fn send_mined_block(&self, block: Block) -> Result<(), String> {
-        self.mined_block_sender.send(block.clone()).await.unwrap();
-        println!("Mined Block: {:?}", block);
+        self.net_mined_block_sender.send(block.clone()).await.unwrap();
         Ok(())
     }
 }
@@ -290,8 +293,8 @@ impl Verifier for Node {
 
     async fn verify_mined_block(&self) {
         loop {
-            if let Ok(mind_block) = self.mined_block_receiver.recv().await {
-                if self.verifier(mind_block.clone()).await {
+            if let Ok(mined_block) = self.mined_block_receiver.recv().await {
+                if self.verifier(mined_block.clone()).await {
                     // self.add_mind_block_to_chain(mind_block).await.unwrap();
                     println!("Block Verifying Result: True");
                 } else {
