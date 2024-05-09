@@ -24,12 +24,14 @@ pub struct Node {
     pub mined_block_sender: Sender<Block>,
     pub mined_block_receiver: Receiver<Block>,
 
+    pub net_mined_block_sender: Sender<Block>,
+
     pub mempool: Arc<RwLock<MemPool>>,
     pub chain: Blockchain,
 }
 
-impl Default for Node {
-    fn default() -> Self {
+impl Node {
+    pub fn new(net_mined_block_sender: Sender<Block>) -> Self {
         let (client_tx_sender, client_tx_receiver) = async_channel::unbounded();
         let (proposed_block_sender, proposed_block_receiver) = async_channel::unbounded();
         let (mined_block_sender, mined_block_receiver) = async_channel::unbounded();
@@ -42,6 +44,8 @@ impl Default for Node {
 
             mined_block_sender,
             mined_block_receiver,
+
+            net_mined_block_sender,
 
             mempool: Arc::new(RwLock::new(MemPool::default())),
             chain: Blockchain::default(),
@@ -218,8 +222,7 @@ impl Miner for Node {
     }
 
     async fn send_mined_block(&self, block: Block) -> Result<(), String> {
-        // self.mined_block_sender.send(block).await.unwrap();
-        println!("Mined Block: {:?}", block);
+        self.net_mined_block_sender.send(block).await.unwrap();
         Ok(())
     }
 }
@@ -243,7 +246,9 @@ impl Verifer for Node {
 
     async fn verify_block(&self) {
         loop {
-            if let Ok(mut _block) = self.mined_block_receiver.recv().await {
+            if let Ok(block) = self.mined_block_receiver.recv().await {
+                println!("Mined Block: {:?}", block);
+                // Verify if Block index is over the chain's last index.
                 // Verify if TXs are existing in the mempool.
                 // Verify if block hash is calculated correctly.
                 // Broadcast to other nodes to be appended to the chain.
@@ -271,6 +276,10 @@ impl NodeController for Node {
             },
             async {
                 self.run_miner().await?;
+                Ok::<(), String>(())
+            },
+            async {
+                self.run_verifier().await?;
                 Ok::<(), String>(())
             }
         );

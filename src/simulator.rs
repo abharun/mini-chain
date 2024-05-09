@@ -16,9 +16,11 @@ pub async fn chain_simulation() {
         )
     };
 
+    let mut network = Network::default();
+
     let mut nodes: Vec<Node> = vec![];
     for _ in 0..node_count {
-        let node = Node::default();
+        let node = Node::new(network.get_mined_block_sender());
         nodes.push(node);
     }
 
@@ -30,8 +32,6 @@ pub async fn chain_simulation() {
             Ok::<(), String>(())
         });
     }
-
-    let mut network = Network::default();
 
     network.set_pipeline(nodes.clone());
 
