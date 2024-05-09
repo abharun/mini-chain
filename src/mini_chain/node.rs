@@ -1,5 +1,5 @@
 use super::{
-    block::{ Block, BlockConfigurer},
+    block::{Block, BlockConfigurer},
     chain::{Blockchain, BlockchainOperation},
     mempool::{MemPool, MemPoolOperation},
     metadata::{ChainMetaData, ChainMetaDataOperation},
@@ -68,7 +68,14 @@ impl Node {
     fn calculate_block_hash(block: Block) -> String {
         let mut hasher = Sha3_256::new();
 
-        let hash_str = format!("{}{}{}{}{}", block.builder().unwrap(), block.timestamp(), block.tx_count(), block.nonce(), block.prev_hash());
+        let hash_str = format!(
+            "{}{}{}{}{}",
+            block.builder().unwrap(),
+            block.timestamp(),
+            block.tx_count(),
+            block.nonce(),
+            block.prev_hash()
+        );
         hasher.update(hash_str);
 
         for tx in block.transactions() {
@@ -249,7 +256,10 @@ impl Miner for Node {
     }
 
     async fn send_mined_block(&self, block: Block) -> Result<(), String> {
-        self.net_mined_block_sender.send(block.clone()).await.unwrap();
+        self.net_mined_block_sender
+            .send(block.clone())
+            .await
+            .unwrap();
         Ok(())
     }
 }
@@ -288,17 +298,28 @@ impl Verifier for Node {
             }
         }
 
-        return Node::verify_block_hash(hash_value, block_difficulty)
+        return Node::verify_block_hash(hash_value, block_difficulty);
     }
 
     async fn verify_mined_block(&self) {
         loop {
             if let Ok(mined_block) = self.mined_block_receiver.recv().await {
+                if mined_block.builder() == Some(self.address.get_public_address().to_string()) {
+                    continue;
+                }
                 if self.verifier(mined_block.clone()).await {
                     // self.add_mind_block_to_chain(mind_block).await.unwrap();
-                    println!("Block Verifying Result: True");
+                    println!(
+                        "Builder: {:?}\nVerifier: {:?}\nBlock Verifying Result: True",
+                        mined_block.builder().unwrap(),
+                        self.address.get_public_address()
+                    );
                 } else {
-                    println!("Block Verifying Result: False");
+                    println!(
+                        "Builder: {:?}\nVerifier: {:?}\nBlock Verifying Result: False",
+                        mined_block.builder().unwrap(),
+                        self.address.get_public_address()
+                    );
                 }
             }
         }
