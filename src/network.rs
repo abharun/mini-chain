@@ -110,34 +110,12 @@ impl Network {
         }
     }
 
-    async fn tx_broadcaster(&self) -> Result<(), String> {
-        let broadcast_future = Self::broadcast_message(
-            self.channel.tx_receiver.clone(),
-            self.channel.node_tx_senders.clone(),
-        );
-
-        let _ = tokio::spawn(broadcast_future);
-
-        Ok(())
-    }
-
-    async fn mined_block_broadcaster(&self) -> Result<(), String> {
-        let broadcast_future = Self::broadcast_message(
-            self.channel.mined_block_receiver.clone(),
-            self.channel.node_mined_block_senders.clone(),
-        );
-
-        let _ = tokio::spawn(broadcast_future);
-
-        Ok(())
-    }
-
-    async fn block_verify_tx_broadcaster(&self) -> Result<(), String> {
-        let broadcast_future = Self::broadcast_message(
-            self.channel.block_verify_tx_receiver.clone(),
-            self.channel.node_block_verify_tx_senders.clone(),
-        );
-
+    async fn run_broadcaster<T: Clone + Send + 'static>(
+        &self,
+        receiver: Receiver<T>,
+        senders: Vec<Sender<T>>,
+    ) -> Result<(), String> {
+        let broadcast_future = Self::broadcast_message(receiver, senders);
         let _ = tokio::spawn(broadcast_future);
 
         Ok(())
@@ -145,21 +123,18 @@ impl Network {
 
     pub async fn run_network(&mut self) -> Result<(), String> {
         let _ = tokio::try_join!(
-            async {
-                let network = self.clone();
-                network.tx_broadcaster().await?;
-                Ok::<(), String>(())
-            },
-            async {
-                let network = self.clone();
-                network.mined_block_broadcaster().await?;
-                Ok::<(), String>(())
-            },
-            async {
-                let network = self.clone();
-                network.block_verify_tx_broadcaster().await?;
-                Ok::<(), String>(())
-            },
+            self.run_broadcaster(
+                self.channel.tx_receiver.clone(),
+                self.channel.node_tx_senders.clone()
+            ),
+            self.run_broadcaster(
+                self.channel.mined_block_receiver.clone(),
+                self.channel.node_mined_block_senders.clone()
+            ),
+            self.run_broadcaster(
+                self.channel.block_verify_tx_receiver.clone(),
+                self.channel.node_block_verify_tx_senders.clone()
+            )
         );
 
         Ok(())
