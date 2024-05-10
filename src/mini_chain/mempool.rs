@@ -32,9 +32,10 @@ impl MemPoolOperation for MemPool {
     }
 
     async fn pickup_transaction(&mut self) -> Result<Transaction, String> {
-        match self.txqueue.pop() {
-            Some(tx) => {Ok(tx)}
-            None => { Err(String::from("Failed to pickup transaction from mempool.")) }
+        if self.txqueue.len() == 0 {
+            return Err(String::from("Failed to pickup transaction from mempool."));
         }
+        let tx = self.txqueue.remove(0);
+        Ok(tx)
     }
 }
