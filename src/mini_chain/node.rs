@@ -1,5 +1,5 @@
 use super::{
-    block::{Block, BlockConfigurer},
+    block::{self, Block, BlockConfigurer},
     chain::{Blockchain, BlockchainOperation},
     mempool::{MemPool, MemPoolOperation},
     metadata::{ChainMetaData, ChainMetaDataOperation},
@@ -287,10 +287,13 @@ impl Miner for Node {
     }
 
     async fn send_mined_block(&mut self, block: Block) -> Result<(), String> {
-        self.stagepool.insert(block.hash().clone(), StagedBlockStatus{
-            block: block.clone(),
-            handsup: 1,
-        });
+        self.stagepool.insert(
+            block.hash().clone(),
+            StagedBlockStatus {
+                block: block.clone(),
+                handsup: 1,
+            },
+        );
         self.net_mined_block_sender
             .send(block.clone())
             .await
@@ -303,7 +306,7 @@ impl Miner for Node {
 #[async_trait]
 pub trait Verifier {
     async fn verifier(&self, block: Block) -> bool;
-    async fn verify_mined_block(&self);
+    async fn verify_mined_block(&mut self);
     async fn run_verifier(&self) -> Result<(), String>;
     async fn add_mind_block_to_chain(&self, block: Block) -> Result<(), String>;
 }
@@ -313,6 +316,10 @@ impl Verifier for Node {
     async fn verifier(&self, block: Block) -> bool {
         let proc_chain = self.chain.write().await;
         if block.prev_hash() != proc_chain.get_leaf().unwrap() {
+            return false;
+        }
+
+        if block.sequence().unwrap() != proc_chain.get_sequence().unwrap() {
             return false;
         }
 
@@ -336,32 +343,41 @@ impl Verifier for Node {
         return Node::verify_block_hash(hash_value, block_difficulty);
     }
 
-    async fn verify_mined_block(&self) {
+    async fn verify_mined_block(&mut self) {
         loop {
             if let Ok(mined_block) = self.mined_block_receiver.recv().await {
                 if mined_block.builder() == Some(self.address.get_public_address().to_string()) {
                     continue;
                 }
+
+                self.stagepool.insert(mined_block.hash().clone(), StagedBlockStatus {
+                    block: mined_block.clone(),
+                    handsup: 1,
+                });
+
                 if self.verifier(mined_block.clone()).await {
-                    // self.add_mind_block_to_chain(mind_block).await.unwrap();
-                    println!(
-                        "Builder: {:?}\nVerifier: {:?}\nBlock Verifying Result: True",
-                        mined_block.builder().unwrap(),
-                        self.address.get_public_address()
-                    );
+                    let _ = self
+                        .net_block_verify_tx_sender
+                        .send(BlockVerifyTx {
+                            block_hash: mined_block.hash().clone(),
+                            verified: true,
+                        })
+                        .await;
                 } else {
-                    println!(
-                        "Builder: {:?}\nVerifier: {:?}\nBlock Verifying Result: False",
-                        mined_block.builder().unwrap(),
-                        self.address.get_public_address()
-                    );
+                    let _ = self
+                        .net_block_verify_tx_sender
+                        .send(BlockVerifyTx {
+                            block_hash: mined_block.hash().clone(),
+                            verified: false,
+                        })
+                        .await;
                 }
             }
         }
     }
 
     async fn run_verifier(&self) -> Result<(), String> {
-        let node = self.clone();
+        let mut node = self.clone();
 
         tokio::spawn(async move {
             node.verify_mined_block().await;
