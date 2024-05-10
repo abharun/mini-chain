@@ -1,5 +1,5 @@
 use super::{
-    block::{self, Block, BlockConfigurer},
+    block::{Block, BlockConfigurer},
     chain::{Blockchain, BlockchainOperation},
     mempool::{MemPool, MemPoolOperation},
     metadata::{ChainMetaData, ChainMetaDataOperation},
@@ -308,7 +308,6 @@ pub trait Verifier {
     async fn verifier(&self, block: Block) -> bool;
     async fn verify_mined_block(&mut self);
     async fn run_verifier(&self) -> Result<(), String>;
-    async fn add_mind_block_to_chain(&self, block: Block) -> Result<(), String>;
 }
 
 #[async_trait]
@@ -385,8 +384,48 @@ impl Verifier for Node {
 
         Ok(())
     }
+}
 
-    async fn add_mind_block_to_chain(&self, _block: Block) -> Result<(), String> {
+#[async_trait]
+pub trait ChainManager {
+    async fn run_chain_manager(&self) -> Result<(), String>;
+    async fn chain_manager(&mut self);
+    async fn add_block_to_chain(&self) -> Result<(), String>;
+}
+
+#[async_trait]
+impl ChainManager for Node {
+    async fn add_block_to_chain(&self) -> Result<(), String> {
+        Ok(())
+    }
+
+    async fn chain_manager(&mut self) {
+        loop {
+            if let Ok(block_verify_tx) = self.block_verify_tx_receiver.recv().await {
+                if let Some(prev_block_status) = self.stagepool.get_mut(&block_verify_tx.block_hash) {
+                    prev_block_status.handsup += 1;
+
+                    let proc_chain = self.chain.write().await;
+                    if prev_block_status.handsup > (proc_chain.get_sequence().unwrap() * 2 / 3) {
+                        self.stagepool.remove(&block_verify_tx.block_hash);
+                        // Add staged block to chain
+                        // Remove TXs in the block from mempool
+                    }
+                } else {
+                    // If staged block is not exisiting on StagePool
+                    // Request to get the block to other nodes.
+                }
+            }
+        }
+    }
+
+    async fn run_chain_manager(&self) -> Result<(), String> {
+        let mut node = self.clone();
+
+        tokio::spawn(async move {
+            node.chain_manager().await;
+        });
+
         Ok(())
     }
 }
