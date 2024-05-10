@@ -9,6 +9,7 @@ use async_channel::{Receiver, Sender};
 use async_trait::async_trait;
 use sha3::{Digest, Sha3_256};
 use std::{
+    collections::HashMap,
     sync::Arc,
     time::{Duration, SystemTime},
 };
@@ -16,8 +17,14 @@ use tokio::{sync::RwLock, time::sleep};
 
 #[derive(Debug, Clone)]
 pub struct BlockVerifyTx {
-    pub sequence: u64,
+    pub block_hash: String,
     pub verified: bool,
+}
+
+#[derive(Debug, Clone)]
+struct StagedBlockStatus {
+    block: Block,
+    handsup: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -39,8 +46,9 @@ pub struct Node {
     pub net_mined_block_sender: Sender<Block>,
     pub net_block_verify_tx_sender: Sender<BlockVerifyTx>,
 
-    pub mempool: Arc<RwLock<MemPool>>,
-    pub chain: Arc<RwLock<Blockchain>>,
+    stagepool: HashMap<String, StagedBlockStatus>,
+    mempool: Arc<RwLock<MemPool>>,
+    chain: Arc<RwLock<Blockchain>>,
 }
 
 impl Node {
@@ -73,6 +81,7 @@ impl Node {
 
             mempool: Arc::new(RwLock::new(MemPool::default())),
             chain: Arc::new(RwLock::new(Blockchain::default())),
+            stagepool: HashMap::new(),
         }
     }
 }
@@ -236,16 +245,16 @@ impl Proposer for Node {
 // Receives a proposed block and mine it by calculating block hash.
 #[async_trait]
 pub trait Miner {
-    async fn run_miner(&self) -> Result<(), String>;
-    async fn mine_block(&self);
+    async fn run_miner(&mut self) -> Result<(), String>;
+    async fn mine_block(&mut self);
     async fn mining(&self, block: &mut Block) -> Result<Block, String>;
-    async fn send_mined_block(&self, block: Block) -> Result<(), String>;
+    async fn send_mined_block(&mut self, block: Block) -> Result<(), String>;
 }
 
 #[async_trait]
 impl Miner for Node {
-    async fn run_miner(&self) -> Result<(), String> {
-        let node = self.clone();
+    async fn run_miner(&mut self) -> Result<(), String> {
+        let mut node = self.clone();
         tokio::spawn(async move {
             node.mine_block().await;
         });
@@ -253,7 +262,7 @@ impl Miner for Node {
         Ok(())
     }
 
-    async fn mine_block(&self) {
+    async fn mine_block(&mut self) {
         loop {
             if let Ok(mut block) = self.proposed_block_receiver.recv().await {
                 let m_block = self.mining(&mut block).await.unwrap();
@@ -277,7 +286,11 @@ impl Miner for Node {
         Ok(block.clone())
     }
 
-    async fn send_mined_block(&self, block: Block) -> Result<(), String> {
+    async fn send_mined_block(&mut self, block: Block) -> Result<(), String> {
+        self.stagepool.insert(block.hash().clone(), StagedBlockStatus{
+            block: block.clone(),
+            handsup: 1,
+        });
         self.net_mined_block_sender
             .send(block.clone())
             .await
@@ -381,7 +394,8 @@ impl NodeController for Node {
                 Ok::<(), String>(())
             },
             async {
-                self.run_miner().await?;
+                let mut node = self.clone();
+                node.run_miner().await?;
                 Ok::<(), String>(())
             },
             async {
