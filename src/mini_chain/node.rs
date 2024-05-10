@@ -46,7 +46,7 @@ pub struct Node {
     pub net_mined_block_sender: Sender<Block>,
     pub net_block_verify_tx_sender: Sender<BlockVerifyTx>,
 
-    stagepool: HashMap<String, StagedBlockStatus>,
+    stagepool: Arc<RwLock<HashMap<String, StagedBlockStatus>>>,
     mempool: Arc<RwLock<MemPool>>,
     chain: Arc<RwLock<Blockchain>>,
 }
@@ -81,7 +81,7 @@ impl Node {
 
             mempool: Arc::new(RwLock::new(MemPool::default())),
             chain: Arc::new(RwLock::new(Blockchain::default())),
-            stagepool: HashMap::new(),
+            stagepool: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 }
@@ -287,7 +287,8 @@ impl Miner for Node {
     }
 
     async fn send_mined_block(&mut self, block: Block) -> Result<(), String> {
-        self.stagepool.insert(
+        let mut proc_stagepool = self.stagepool.write().await;
+        proc_stagepool.insert(
             block.hash().clone(),
             StagedBlockStatus {
                 block: block.clone(),
@@ -349,7 +350,8 @@ impl Verifier for Node {
                     continue;
                 }
 
-                self.stagepool.insert(mined_block.hash().clone(), StagedBlockStatus {
+                let mut proc_stagepool = self.stagepool.write().await;
+                proc_stagepool.insert(mined_block.hash().clone(), StagedBlockStatus {
                     block: mined_block.clone(),
                     handsup: 1,
                 });
@@ -402,13 +404,14 @@ impl ChainManager for Node {
     async fn chain_manager(&mut self) {
         loop {
             if let Ok(block_verify_tx) = self.block_verify_tx_receiver.recv().await {
-                if let Some(prev_block_status) = self.stagepool.get_mut(&block_verify_tx.block_hash) {
+                let mut proc_stagepool = self.stagepool.write().await;
+                if let Some(prev_block_status) = proc_stagepool.get_mut(&block_verify_tx.block_hash) {
                     prev_block_status.handsup += 1;
 
-                    let proc_chain = self.chain.write().await;
+                    let mut proc_chain = self.chain.write().await;
                     if prev_block_status.handsup > (proc_chain.get_sequence().unwrap() * 2 / 3) {
-                        self.stagepool.remove(&block_verify_tx.block_hash);
-                        // Add staged block to chain
+                        let prev_status = proc_stagepool.remove(&block_verify_tx.block_hash).unwrap();
+                        let _ = proc_chain.add_block(prev_status.block.clone());
                         // Remove TXs in the block from mempool
                     }
                 } else {
