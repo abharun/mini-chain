@@ -20,7 +20,10 @@ pub async fn chain_simulation() {
 
     let mut nodes: Vec<Node> = vec![];
     for _ in 0..node_count {
-        let node = Node::new(network.get_mined_block_sender());
+        let node = Node::new(
+            network.get_mined_block_sender(),
+            network.get_block_verify_tx_sender(),
+        );
         nodes.push(node);
     }
 

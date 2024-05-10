@@ -15,6 +15,12 @@ use std::{
 use tokio::{sync::RwLock, time::sleep};
 
 #[derive(Debug, Clone)]
+pub struct BlockVerifyTx {
+    pub sequence: u64,
+    pub verified: bool,
+}
+
+#[derive(Debug, Clone)]
 pub struct Node {
     pub address: Address,
 
@@ -27,18 +33,26 @@ pub struct Node {
     pub mined_block_sender: Sender<Block>,
     pub mined_block_receiver: Receiver<Block>,
 
+    pub block_verify_tx_sender: Sender<BlockVerifyTx>,
+    pub block_verify_tx_receiver: Receiver<BlockVerifyTx>,
+
     pub net_mined_block_sender: Sender<Block>,
+    pub net_block_verify_tx_sender: Sender<BlockVerifyTx>,
 
     pub mempool: Arc<RwLock<MemPool>>,
     pub chain: Arc<RwLock<Blockchain>>,
 }
 
 impl Node {
-    pub fn new(net_mined_block_sender: Sender<Block>) -> Self {
+    pub fn new(
+        net_mined_block_sender: Sender<Block>,
+        net_block_verify_tx_sender: Sender<BlockVerifyTx>,
+    ) -> Self {
         let address = Address::new();
         let (client_tx_sender, client_tx_receiver) = async_channel::unbounded();
         let (proposed_block_sender, proposed_block_receiver) = async_channel::unbounded();
         let (mined_block_sender, mined_block_receiver) = async_channel::unbounded();
+        let (block_verify_tx_sender, block_verify_tx_receiver) = async_channel::unbounded();
         Self {
             address,
 
@@ -51,7 +65,11 @@ impl Node {
             mined_block_sender,
             mined_block_receiver,
 
+            block_verify_tx_sender,
+            block_verify_tx_receiver,
+
             net_mined_block_sender,
+            net_block_verify_tx_sender,
 
             mempool: Arc::new(RwLock::new(MemPool::default())),
             chain: Arc::new(RwLock::new(Blockchain::default())),
