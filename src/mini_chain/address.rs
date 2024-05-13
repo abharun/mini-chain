@@ -1,7 +1,15 @@
+use std::fmt;
+use sha3::{Digest, Sha3_256};
 use rand::{distributions::Alphanumeric, Rng};
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Address(String, String);
+
+impl fmt::Display for Address {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:{}", self.0, self.1)
+    }
+}
 
 impl Address {
     pub fn new() -> Self {
@@ -24,7 +32,18 @@ impl Address {
         &self.0
     }
 
-    pub fn get_private_address(&self) -> &str {
-        &self.1
+    pub fn get_signature(&self) -> String {
+        let mut hasher = Sha3_256::new();
+
+        let data = format!("{}{}", &self.0, &self.1);
+
+        hasher.update(data);
+
+        let hash = format!("{:x}", hasher.finalize());
+        hash
     }
+
+    // pub fn get_private_address(&self) -> &str {
+    //     &self.1
+    // }
 }

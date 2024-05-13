@@ -1,9 +1,9 @@
 use std::time::Duration;
 
 use crate::mini_chain::{
+    address::Address,
     metadata::{ChainMetaData, ChainMetaDataOperation},
     transaction::Transaction,
-    address::Address,
 };
 use async_channel::Sender;
 use async_trait::async_trait;
@@ -37,9 +37,18 @@ impl TxTrigger for Client {
         // let amount = rnd.gen_range(0..100);
         let amount = 20;
 
-        let new_tx = Transaction::new(self.addr.clone(), amount);
+        let new_tx = Transaction::new(String::new(), amount);
 
-        let _ = self.net_tx_sender.send(new_tx).await.map_err(|e| e.to_string())?;
+        new_tx.sign_transaction(
+            self.addr.get_public_address().to_string(),
+            self.addr.get_signature(),
+        );
+
+        let _ = self
+            .net_tx_sender
+            .send(new_tx)
+            .await
+            .map_err(|e| e.to_string())?;
 
         Ok(())
     }
