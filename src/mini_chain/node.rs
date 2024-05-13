@@ -3,7 +3,8 @@ use super::{
     chain::{Blockchain, BlockchainOperation},
     mempool::{MemPool, MemPoolOperation},
     metadata::{ChainMetaData, ChainMetaDataOperation},
-    transaction::{Address, Transaction},
+    transaction::Transaction,
+    address::Address,
 };
 use async_channel::{Receiver, Sender};
 use async_trait::async_trait;

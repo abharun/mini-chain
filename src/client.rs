@@ -2,7 +2,8 @@ use std::time::Duration;
 
 use crate::mini_chain::{
     metadata::{ChainMetaData, ChainMetaDataOperation},
-    transaction::{Address, Transaction},
+    transaction::Transaction,
+    address::Address,
 };
 use async_channel::Sender;
 use async_trait::async_trait;
