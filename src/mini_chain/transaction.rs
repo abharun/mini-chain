@@ -16,12 +16,12 @@ impl fmt::Display for TxPayload {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Transaction {
-    timestamp: usize,
-    nonce: usize,
-    payload: TxPayload,
-    signer: String,
-    signature: String,
-    hash: String,
+    pub timestamp: usize,
+    pub nonce: usize,
+    pub payload: TxPayload,
+    pub signer: String,
+    pub signature: String,
+    pub hash: String,
 }
 
 impl Transaction {
