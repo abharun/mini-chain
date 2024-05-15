@@ -1,52 +1,17 @@
-use rand::{distributions::Alphanumeric, Rng};
+use std::fmt;
 use sha3::{Digest, Sha3_256};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct Address(String, String);
-
-impl Address {
-    pub fn new() -> Self {
-        let pub_addr: String = rand::thread_rng()
-            .sample_iter(&Alphanumeric)
-            .take(40)
-            .map(char::from)
-            .collect();
-
-        let pri_addr: String = rand::thread_rng()
-            .sample_iter(&Alphanumeric)
-            .take(64)
-            .map(char::from)
-            .collect();
-
-        Address(pub_addr, pri_addr)
-    }
-
-    pub fn get_public_address(&self) -> &str {
-        &self.0
-    }
-
-    pub fn get_private_address(&self) -> &str {
-        &self.1
-    }
-}
-
-#[derive(Debug, PartialEq, Clone)]
-pub struct Signature(String);
-
-impl Signature {
-    pub fn generate_signature(addr: Address) -> Self {
-        let mut hasher = Sha3_256::new();
-        hasher.update(addr.get_private_address());
-        let sign = format!("{:x}", hasher.finalize());
-        Signature(sign)
-    }
-}
-
-#[derive(Debug, PartialEq, Clone)]
 pub struct TxPayload {
-    pub addr: Address,
+    pub addr: String,
     pub amount: usize,
+}
+
+impl fmt::Display for TxPayload {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:{}", self.addr, self.amount)
+    }
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -54,12 +19,13 @@ pub struct Transaction {
     pub timestamp: usize,
     pub nonce: usize,
     pub payload: TxPayload,
-    pub signer: Address,
-    pub signature: Signature,
+    pub signer: String,
+    pub signature: String,
+    pub hash: String,
 }
 
 impl Transaction {
-    pub fn new(addr: Address, amount: usize) -> Self {
+    pub fn new(to_addr: String, amount: usize) -> Self {
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -68,18 +34,51 @@ impl Transaction {
             timestamp: timestamp,
             nonce: 0,
             payload: TxPayload {
-                addr: addr,
+                addr: to_addr.clone(),
                 amount: amount,
             },
-            signer: Address(String::new(), String::new()),
-            signature: Signature(String::new()),
+            signer: String::new(),
+            signature: String::new(),
+            hash: String::new(),
         }
     }
 
-    pub fn sign_transaction(&mut self, addr: Address) -> Result<(), String> {
+    pub fn sign_transaction(&mut self, addr: String, signature: String) {
         self.signer = addr.clone();
-        self.signature = Signature::generate_signature(addr.clone());
-
-        Ok(())
+        self.signature = signature.clone();
     }
+
+    pub fn calculate_hash(tx: Transaction) -> String {
+        let mut hasher = Sha3_256::new();
+
+        let data = format!(
+            "{}{}{}{}{}",
+            tx.timestamp, tx.nonce, tx.payload, tx.signer, tx.signature
+        );
+
+        hasher.update(data);
+
+        let hash = format!("{:x}", hasher.finalize());
+        hash
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum TxStatus {
+    RECEIVED,
+    PROCESSING,
+    APPROVED,
+    REJECTED,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum TxExisting {
+    EXISTING,
+    NONEXISTING,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct TxPoolRecord {
+    pub status: TxStatus,
+    pub transaction: Transaction,
 }
