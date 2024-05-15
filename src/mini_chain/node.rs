@@ -188,7 +188,6 @@ impl Proposer for Node {
             Err(_) => {}
         };
 
-        let proc_chain = self.chain.write().await;
         let prev_hash = proc_chain.get_leaf().unwrap();
         block.set_prev_hash(prev_hash);
 
@@ -396,21 +395,19 @@ impl Verifier for Node {
 pub trait ChainManager {
     async fn run_chain_manager(&self) -> Result<(), String>;
     async fn chain_manager(&mut self);
-    async fn add_block_to_chain(&self) -> Result<(), String>;
 }
 
 #[async_trait]
 impl ChainManager for Node {
-    async fn add_block_to_chain(&self) -> Result<(), String> {
-        Ok(())
-    }
-
     async fn chain_manager(&mut self) {
         loop {
             if let Ok(block_verify_tx) = self.block_verify_tx_receiver.recv().await {
                 let mut proc_stagepool = self.stagepool.write().await;
                 if let Some(prev_block_status) = proc_stagepool.get_mut(&block_verify_tx.block_hash)
                 {
+                    if block_verify_tx.verified == false {
+                        continue;
+                    }
                     prev_block_status.handsup += 1;
 
                     let mut proc_chain = self.chain.write().await;
@@ -420,7 +417,9 @@ impl ChainManager for Node {
                         let _ = proc_chain.add_block(prev_status.block.clone());
 
                         let mut proc_mempool = self.mempool.write().await;
-                        let _ = proc_mempool.remove_transactions(prev_status.block.tx_hashes().clone()).await;
+                        let _ = proc_mempool
+                            .remove_transactions(prev_status.block.tx_hashes().clone())
+                            .await;
                     }
                 } else {
                     // If staged block is not exisiting on StagePool
@@ -466,6 +465,10 @@ impl NodeController for Node {
             },
             async {
                 self.run_verifier().await?;
+                Ok::<(), String>(())
+            },
+            async {
+                self.run_chain_manager().await?;
                 Ok::<(), String>(())
             }
         );
