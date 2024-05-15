@@ -22,6 +22,7 @@ pub trait MemPoolOperation {
     async fn add_transaction(&mut self, tx: Transaction) -> Result<(), String>;
     async fn existing_transaction(&self, tx: Transaction) -> TxExisting;
     async fn pickup_transaction(&mut self, count: usize) -> Result<Vec<Transaction>, String>;
+    async fn remove_transactions(&mut self, hashes: Vec<String>) -> Result<(), String>;
 }
 
 #[async_trait]
@@ -54,5 +55,13 @@ impl MemPoolOperation for MemPool {
             .collect();
 
         Ok(pool_received_records)
+    }
+
+    async fn remove_transactions(&mut self, hashes: Vec<String>) -> Result<(), String> {
+        for hash in hashes {
+            self.txpool.remove(&hash);
+        }
+
+        Ok(())
     }
 }

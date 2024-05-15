@@ -418,7 +418,9 @@ impl ChainManager for Node {
                         let prev_status =
                             proc_stagepool.remove(&block_verify_tx.block_hash).unwrap();
                         let _ = proc_chain.add_block(prev_status.block.clone());
-                        // Remove TXs in the block from mempool
+
+                        let mut proc_mempool = self.mempool.write().await;
+                        let _ = proc_mempool.remove_transactions(prev_status.block.tx_hashes().clone()).await;
                     }
                 } else {
                     // If staged block is not exisiting on StagePool

@@ -47,6 +47,10 @@ impl Block {
     pub fn prev_hash(&self) -> String { self.prev_hash.clone() }
     pub fn hash(&self) -> String { self.hash.clone() }
     pub fn inc_nonce(&mut self) { self.nonce += 1; }
+    pub fn tx_hashes(&self) -> Vec<String> {
+        let hashes: Vec<String> = self.transactions.iter().map(|tx| tx.hash.clone()).collect();
+        hashes
+    }
 }
 
 pub trait BlockConfigurer {
