@@ -2,7 +2,7 @@ use async_channel::{Receiver, Sender};
 
 use crate::mini_chain::{
     block::Block,
-    node::{BlockVerifyTx, Node},
+    node::{BlockVerifyTx, GetNonExistingBlockTx, Node},
     transaction::Transaction,
 };
 
@@ -19,6 +19,10 @@ pub struct Channels {
     pub block_verify_tx_sender: Sender<BlockVerifyTx>,
     pub block_verify_tx_receiver: Receiver<BlockVerifyTx>,
     pub node_block_verify_tx_senders: Vec<Sender<BlockVerifyTx>>,
+
+    pub non_existing_block_request_sender: Sender<GetNonExistingBlockTx>,
+    pub non_existing_block_request_receiver: Receiver<GetNonExistingBlockTx>,
+    pub node_non_existing_block_request_senders: Vec<Sender<GetNonExistingBlockTx>>,
 }
 
 impl Default for Channels {
@@ -26,6 +30,7 @@ impl Default for Channels {
         let (tx_sender, tx_receiver) = async_channel::unbounded();
         let (mined_block_sender, mined_block_receiver) = async_channel::unbounded();
         let (block_verify_tx_sender, block_verify_tx_receiver) = async_channel::unbounded();
+        let (non_existing_block_request_sender, non_existing_block_request_receiver) = async_channel::unbounded();
         Self {
             tx_sender,
             tx_receiver,
@@ -38,6 +43,10 @@ impl Default for Channels {
             block_verify_tx_sender,
             block_verify_tx_receiver,
             node_block_verify_tx_senders: vec![],
+
+            non_existing_block_request_sender,
+            non_existing_block_request_receiver,
+            node_non_existing_block_request_senders: vec![],
         }
     }
 }
@@ -52,6 +61,7 @@ impl ChannelConfigurer for Channels {
             self.node_tx_senders.push(node.client_tx_sender);
             self.node_mined_block_senders.push(node.mined_block_sender);
             self.node_block_verify_tx_senders.push(node.block_verify_tx_sender);
+            self.node_non_existing_block_request_senders.push(node.non_existing_block_request_sender);
         }
     }
 }
@@ -73,6 +83,7 @@ pub trait NetworkConfigurer {
     fn get_tx_sender(&self) -> Sender<Transaction>;
     fn get_mined_block_sender(&self) -> Sender<Block>;
     fn get_block_verify_tx_sender(&self) -> Sender<BlockVerifyTx>;
+    fn get_non_existing_block_request_sender(&self) -> Sender<GetNonExistingBlockTx>;
 
     fn set_pipeline(&mut self, nodes: Vec<Node>);
 }
@@ -88,6 +99,10 @@ impl NetworkConfigurer for Network {
 
     fn get_block_verify_tx_sender(&self) -> Sender<BlockVerifyTx> {
         self.channel.block_verify_tx_sender.clone()
+    }
+
+    fn get_non_existing_block_request_sender(&self) -> Sender<GetNonExistingBlockTx> {
+        self.channel.non_existing_block_request_sender.clone()
     }
 
     fn set_pipeline(&mut self, nodes: Vec<Node>) {
@@ -134,6 +149,10 @@ impl Network {
             self.run_broadcaster(
                 self.channel.block_verify_tx_receiver.clone(),
                 self.channel.node_block_verify_tx_senders.clone()
+            ),
+            self.run_broadcaster(
+                self.channel.non_existing_block_request_receiver.clone(),
+                self.channel.node_non_existing_block_request_senders.clone()
             )
         );
 

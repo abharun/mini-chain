@@ -23,6 +23,7 @@ pub async fn chain_simulation() {
         let node = Node::new(
             network.get_mined_block_sender(),
             network.get_block_verify_tx_sender(),
+            network.get_non_existing_block_request_sender(),
         );
         nodes.push(node);
     }

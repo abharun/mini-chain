@@ -22,6 +22,13 @@ pub struct BlockVerifyTx {
 }
 
 #[derive(Debug, Clone)]
+pub struct GetNonExistingBlockTx {
+    pub sender: String,
+    pub hash_key: String,
+    pub block_sender: Sender<Block>,
+}
+
+#[derive(Debug, Clone)]
 struct StagedBlockStatus {
     block: Block,
     handsup: u64,
@@ -43,8 +50,15 @@ pub struct Node {
     pub block_verify_tx_sender: Sender<BlockVerifyTx>,
     pub block_verify_tx_receiver: Receiver<BlockVerifyTx>,
 
+    pub non_existing_block_sender: Sender<Block>,
+    pub non_existing_block_receiver: Receiver<Block>,
+
+    pub non_existing_block_request_sender: Sender<GetNonExistingBlockTx>,
+    pub non_existing_block_request_receiver: Receiver<GetNonExistingBlockTx>,
+
     pub net_mined_block_sender: Sender<Block>,
     pub net_block_verify_tx_sender: Sender<BlockVerifyTx>,
+    pub net_non_existing_block_request_sender: Sender<GetNonExistingBlockTx>,
 
     stagepool: Arc<RwLock<HashMap<String, StagedBlockStatus>>>,
     mempool: Arc<RwLock<MemPool>>,
@@ -55,12 +69,15 @@ impl Node {
     pub fn new(
         net_mined_block_sender: Sender<Block>,
         net_block_verify_tx_sender: Sender<BlockVerifyTx>,
+        net_non_existing_block_request_sender: Sender<GetNonExistingBlockTx>,
     ) -> Self {
         let address = Address::new();
         let (client_tx_sender, client_tx_receiver) = async_channel::unbounded();
         let (proposed_block_sender, proposed_block_receiver) = async_channel::unbounded();
         let (mined_block_sender, mined_block_receiver) = async_channel::unbounded();
         let (block_verify_tx_sender, block_verify_tx_receiver) = async_channel::unbounded();
+        let (non_existing_block_sender, non_existing_block_receiver) = async_channel::unbounded();
+        let (non_existing_block_request_sender, non_existing_block_request_receiver) = async_channel::unbounded();
         Self {
             address,
 
@@ -76,8 +93,15 @@ impl Node {
             block_verify_tx_sender,
             block_verify_tx_receiver,
 
+            non_existing_block_sender,
+            non_existing_block_receiver,
+
+            non_existing_block_request_sender,
+            non_existing_block_request_receiver,
+
             net_mined_block_sender,
             net_block_verify_tx_sender,
+            net_non_existing_block_request_sender,
 
             mempool: Arc::new(RwLock::new(MemPool::default())),
             chain: Arc::new(RwLock::new(Blockchain::default())),
