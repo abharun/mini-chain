@@ -76,7 +76,8 @@ impl Node {
         let (mined_block_sender, mined_block_receiver) = async_channel::unbounded();
         let (block_verify_tx_sender, block_verify_tx_receiver) = async_channel::unbounded();
         let (non_existing_block_sender, non_existing_block_receiver) = async_channel::unbounded();
-        let (non_existing_block_request_sender, non_existing_block_request_receiver) = async_channel::unbounded();
+        let (non_existing_block_request_sender, non_existing_block_request_receiver) =
+            async_channel::unbounded();
         Self {
             address,
 
@@ -445,15 +446,15 @@ impl ChainManager for Node {
                             .await;
                     }
                 } else {
-                    // If staged block is not exisiting on StagePool
-                    // Request to get the block to other nodes.
-                    
                     let get_block_request = GetNonExistingBlockTx {
                         hash_key: block_verify_tx.block_hash.clone(),
                         block_sender: self.non_existing_block_sender.clone(),
                     };
 
-                    self.net_non_existing_block_request_sender.send(get_block_request).await.unwrap();
+                    self.net_non_existing_block_request_sender
+                        .send(get_block_request)
+                        .await
+                        .unwrap();
                 }
             }
         }
