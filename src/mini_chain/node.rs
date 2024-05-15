@@ -23,9 +23,8 @@ pub struct BlockVerifyTx {
 
 #[derive(Debug, Clone)]
 pub struct GetNonExistingBlockTx {
-    pub sender: String,
-    pub hash_key: String,
-    pub block_sender: Sender<Block>,
+    hash_key: String,
+    block_sender: Sender<StagedBlockStatus>,
 }
 
 #[derive(Debug, Clone)]
@@ -50,8 +49,8 @@ pub struct Node {
     pub block_verify_tx_sender: Sender<BlockVerifyTx>,
     pub block_verify_tx_receiver: Receiver<BlockVerifyTx>,
 
-    pub non_existing_block_sender: Sender<Block>,
-    pub non_existing_block_receiver: Receiver<Block>,
+    non_existing_block_sender: Sender<StagedBlockStatus>,
+    non_existing_block_receiver: Receiver<StagedBlockStatus>,
 
     pub non_existing_block_request_sender: Sender<GetNonExistingBlockTx>,
     pub non_existing_block_request_receiver: Receiver<GetNonExistingBlockTx>,
@@ -448,6 +447,13 @@ impl ChainManager for Node {
                 } else {
                     // If staged block is not exisiting on StagePool
                     // Request to get the block to other nodes.
+                    
+                    let get_block_request = GetNonExistingBlockTx {
+                        hash_key: block_verify_tx.block_hash.clone(),
+                        block_sender: self.non_existing_block_sender.clone(),
+                    };
+
+                    self.net_non_existing_block_request_sender.send(get_block_request).await.unwrap();
                 }
             }
         }
@@ -464,9 +470,50 @@ impl ChainManager for Node {
     }
 }
 
+#[async_trait]
+pub trait BlockGetProcesser {
+    async fn run_get_processser(&self) -> Result<(), String>;
+    async fn request_processer(&self);
+    async fn receive_block_processer(&self);
+}
+
+#[async_trait]
+impl BlockGetProcesser for Node {
+    async fn request_processer(&self) {
+        loop {
+            if let Ok(request) = self.non_existing_block_request_receiver.recv().await {
+                let proc_stagepool = self.stagepool.write().await;
+                if let Some(block) = proc_stagepool.get(&request.hash_key) {
+                    let _ = request.block_sender.send(block.clone()).await.unwrap();
+                    break;
+                }
+            }
+        }
+    }
+
+    async fn receive_block_processer(&self) {
+        loop {
+            if let Ok(block) = self.non_existing_block_receiver.recv().await {
+                let mut proc_stagepool = self.stagepool.write().await;
+                proc_stagepool.insert(block.block.hash(), block.clone());
+            }
+        }
+    }
+
+    async fn run_get_processser(&self) -> Result<(), String> {
+        let node = self.clone();
+
+        tokio::spawn(async move {
+            node.request_processer().await;
+        });
+
+        Ok(())
+    }
+}
+
 // Whole Node Controller
 #[async_trait]
-pub trait NodeController: TxProcesser + Proposer + Miner + Verifier {
+pub trait NodeController: TxProcesser + Proposer + Miner + Verifier + BlockGetProcesser {
     async fn run_node(&self) -> Result<(), String>;
 }
 
