@@ -43,7 +43,7 @@ impl Transaction {
         }
     }
 
-    pub fn sign_transaction(&self, addr: String, signature: String) {
+    pub fn sign_transaction(&mut self, addr: String, signature: String) {
         self.signer = addr.clone();
         self.signature = signature.clone();
     }
@@ -64,7 +64,21 @@ impl Transaction {
 }
 
 #[derive(Debug, PartialEq, Clone)]
+pub enum TxStatus {
+    RECEIVED,
+    PROCESSING,
+    APPROVED,
+    REJECTED,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum TxExisting {
+    EXISTING,
+    NONEXISTING,
+}
+
+#[derive(Debug, PartialEq, Clone)]
 pub struct TxPoolRecord {
-    pub status: String,
+    pub status: TxStatus,
     pub transaction: Transaction,
 }

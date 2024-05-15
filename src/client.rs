@@ -37,7 +37,7 @@ impl TxTrigger for Client {
         // let amount = rnd.gen_range(0..100);
         let amount = 20;
 
-        let new_tx = Transaction::new(String::new(), amount);
+        let mut new_tx = Transaction::new(String::new(), amount);
 
         new_tx.sign_transaction(
             self.addr.get_public_address().to_string(),

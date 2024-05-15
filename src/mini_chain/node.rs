@@ -1,20 +1,19 @@
 use super::{
+    address::Address,
     block::{Block, BlockConfigurer},
     chain::{Blockchain, BlockchainOperation},
     mempool::{MemPool, MemPoolOperation},
     metadata::{ChainMetaData, ChainMetaDataOperation},
-    transaction::Transaction,
-    address::Address,
+    transaction::{Transaction, TxExisting},
 };
 use async_channel::{Receiver, Sender};
 use async_trait::async_trait;
 use sha3::{Digest, Sha3_256};
-use std::{
-    collections::HashMap,
-    sync::Arc,
-    time::{Duration, SystemTime},
+use std::{collections::HashMap, sync::Arc, time::Duration};
+use tokio::{
+    sync::RwLock,
+    time::{sleep, timeout},
 };
-use tokio::{sync::RwLock, time::sleep};
 
 #[derive(Debug, Clone)]
 pub struct BlockVerifyTx {
@@ -172,21 +171,22 @@ impl Proposer for Node {
         let proc_chain = self.chain.write().await;
         block.set_block_sequence(proc_chain.get_sequence().unwrap());
 
-        let time_limit = SystemTime::now() + Duration::from_millis(block_tx_pickup_period as u64);
+        let mut proc_mempool = self.mempool.write().await;
 
-        for _ in 0..block_size {
-            let mut proc_mempool = self.mempool.write().await;
-            match proc_mempool.pickup_transaction().await {
-                Ok(tx) => {
-                    block.add_transaction(tx);
+        match timeout(
+            Duration::from_millis(block_tx_pickup_period as u64),
+            async { proc_mempool.pickup_transaction(block_size).await },
+        )
+        .await
+        {
+            Ok(Ok(transactions)) => {
+                for tx in transactions.iter() {
+                    block.add_transaction(tx.clone());
                 }
-                Err(_) => {}
-            };
-
-            if SystemTime::now() > time_limit {
-                break;
             }
-        }
+            Ok(Err(_)) => {}
+            Err(_) => {}
+        };
 
         let proc_chain = self.chain.write().await;
         let prev_hash = proc_chain.get_leaf().unwrap();
@@ -336,7 +336,7 @@ impl Verifier for Node {
 
         let proc_pool = self.mempool.write().await;
         for tx in block.transactions() {
-            if !proc_pool.existing_transaction(tx.clone()).await.unwrap() {
+            if proc_pool.existing_transaction(tx.clone()).await == TxExisting::NONEXISTING {
                 return false;
             }
         }
@@ -352,10 +352,13 @@ impl Verifier for Node {
                 }
 
                 let mut proc_stagepool = self.stagepool.write().await;
-                proc_stagepool.insert(mined_block.hash().clone(), StagedBlockStatus {
-                    block: mined_block.clone(),
-                    handsup: 1,
-                });
+                proc_stagepool.insert(
+                    mined_block.hash().clone(),
+                    StagedBlockStatus {
+                        block: mined_block.clone(),
+                        handsup: 1,
+                    },
+                );
 
                 if self.verifier(mined_block.clone()).await {
                     let _ = self
@@ -406,12 +409,14 @@ impl ChainManager for Node {
         loop {
             if let Ok(block_verify_tx) = self.block_verify_tx_receiver.recv().await {
                 let mut proc_stagepool = self.stagepool.write().await;
-                if let Some(prev_block_status) = proc_stagepool.get_mut(&block_verify_tx.block_hash) {
+                if let Some(prev_block_status) = proc_stagepool.get_mut(&block_verify_tx.block_hash)
+                {
                     prev_block_status.handsup += 1;
 
                     let mut proc_chain = self.chain.write().await;
                     if prev_block_status.handsup > (proc_chain.get_sequence().unwrap() * 2 / 3) {
-                        let prev_status = proc_stagepool.remove(&block_verify_tx.block_hash).unwrap();
+                        let prev_status =
+                            proc_stagepool.remove(&block_verify_tx.block_hash).unwrap();
                         let _ = proc_chain.add_block(prev_status.block.clone());
                         // Remove TXs in the block from mempool
                     }
